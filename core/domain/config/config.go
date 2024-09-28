@@ -6,9 +6,17 @@ import (
 	"os"
 )
 
+type Pages struct {
+	Crawl   []string `toml:"crawl"`
+	Exclude []string `toml:"exclude"`
+	Include []string `toml:"include"`
+}
+
 type Config struct {
 	URL    string `toml:"url"`
 	Output string `toml:"output"`
+
+	Pages Pages `toml:"pages"`
 }
 
 func (c Config) Export() ([]byte, error) {
@@ -22,8 +30,13 @@ func (c Config) Export() ([]byte, error) {
 
 func NewDefaultConfig() *Config {
 	return &Config{
-		URL:    "http://localhost:8000",
+		URL:    "http://127.0.0.1:8000",
 		Output: "dist/",
+		Pages: Pages{
+			Crawl:   []string{"/"},
+			Exclude: []string{},
+			Include: []string{},
+		},
 	}
 }
 

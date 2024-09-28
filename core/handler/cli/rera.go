@@ -12,6 +12,7 @@ func New(opts ...cli.Opt) *cli.CLI {
 
 	rera.Add(
 		cmd.NewInitCommand(rera),
+		cmd.NewExportCommand(rera),
 	)
 
 	return rera
