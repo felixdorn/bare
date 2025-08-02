@@ -1,19 +1,20 @@
 package cli
 
 import (
-	"github.com/felixdorn/rera/core/handler/cli/cli"
-	"github.com/felixdorn/rera/core/handler/cli/cmd"
+	"github.com/felixdorn/bare/core/handler/cli/cli"
+	"github.com/felixdorn/bare/core/handler/cli/cmd"
 )
 
 func New(opts ...cli.Opt) *cli.CLI {
-	rera := cli.New(
+	bare := cli.New(
 		opts...,
 	)
 
-	rera.Add(
-		cmd.NewInitCommand(rera),
-		cmd.NewExportCommand(rera),
+	bare.Add(
+		cmd.NewInitCommand(bare),
+		cmd.NewExportCommand(bare),
+		cmd.NewServeCommand(bare),
 	)
 
-	return rera
+	return bare
 }

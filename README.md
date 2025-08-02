@@ -25,10 +25,10 @@ Create a default `bare.toml` configuration file:
 bare init
 ```
 
-And then export you site;
+And then export your site:
 
 ```bash
-bare export localhost:8000 -o dist/
+bare export http://localhost:8000 --output dist/
 ```
 
 This will produce, alongside an export of your website, a detailed report of the pages Bare found and the assumptions it

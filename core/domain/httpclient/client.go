@@ -2,46 +2,54 @@ package httpclient
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"golang.org/x/net/html"
 	"io"
 	"net/http"
-	"net/url"
+	"time"
+
+	"github.com/felixdorn/bare/core/domain/url"
+	"golang.org/x/net/html"
 )
 
 type Page struct {
 	Code  int
 	URL   *url.URL
-	Links []string
+	Links []*url.URL
 	Body  io.Reader
 }
 
-func GetPage(URL string) (*Page, error) {
-	parsedURL, err := url.ParseRequestURI(URL)
+// httpClient is the package-level HTTP client with a timeout.
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+
+func GetPage(ctx context.Context, pageURL *url.URL) (*Page, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse Value: %w", err)
+		return nil, fmt.Errorf("could not create request: %w", err)
 	}
 
-	resp, err := http.Get(URL)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("could not reach %s: %w", URL, err)
+		return nil, fmt.Errorf("could not reach %s: %w", pageURL, err)
 	}
+	defer resp.Body.Close()
 
 	byt, err := io.ReadAll(resp.Body)
 	if err != nil {
-		resp.Body.Close()
 		return nil, fmt.Errorf("could not read response body: %w", err)
 	}
 
-	resp.Body.Close()
-
 	page := &Page{
-		Code: resp.StatusCode,
-		URL:  parsedURL,
-		Body: bytes.NewReader(byt),
+		Code:  resp.StatusCode,
+		URL:   pageURL,
+		Body:  bytes.NewReader(byt),
+		Links: []*url.URL{},
 	}
 
-	z := html.NewTokenizer(page.Body)
+	// Use a separate reader for parsing so we don't consume the one in the Page struct.
+	z := html.NewTokenizer(bytes.NewReader(byt))
 
 	for {
 		tt := z.Next()
@@ -58,7 +66,21 @@ func GetPage(URL string) (*Page, error) {
 
 		for _, attr := range t.Attr {
 			if attr.Key == "href" || attr.Key == "src" {
-				page.Links = append(page.Links, attr.Val)
+				linkURL, err := url.Parse(attr.Val)
+				if err != nil {
+					// Malformed URL, just ignore it and break to the next token
+					break
+				}
+
+				// Only process http and https links.
+				if linkURL.Scheme != "" && linkURL.Scheme != "http" && linkURL.Scheme != "https" {
+					break
+				}
+
+				resolvedURL := pageURL.ResolveReference(linkURL)
+				if resolvedURL.IsInternal(pageURL) {
+					page.Links = append(page.Links, resolvedURL)
+				}
 				break
 			}
 		}

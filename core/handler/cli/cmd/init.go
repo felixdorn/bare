@@ -3,8 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/felixdorn/rera/core/domain/config"
-	"github.com/felixdorn/rera/core/handler/cli/cli"
+	"github.com/felixdorn/bare/core/domain/config"
+	"github.com/felixdorn/bare/core/handler/cli/cli"
 	"os"
 
 	"github.com/spf13/cobra"

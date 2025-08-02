@@ -2,10 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/felixdorn/rera/core/static"
-	"github.com/rs/zerolog"
 	"io"
 	"os"
+
+	"github.com/felixdorn/bare/core/static"
+	"github.com/rs/zerolog"
 
 	"github.com/spf13/cobra"
 )
@@ -42,6 +43,11 @@ func (c *CLI) Err() io.Writer {
 	return c.err
 }
 
+// Log returns the CLI's logger.
+func (c *CLI) Log() zerolog.Logger {
+	return c.log
+}
+
 // Run the name CLI with the given command line arguments.
 // and returns the exit code for the command.
 func (c *CLI) Run(args []string) int {
@@ -53,6 +59,13 @@ func (c *CLI) Run(args []string) int {
 			DisableDefaultCmd: true,
 		},
 		Version: fmt.Sprintf("%s, build %s", static.Version, static.Commit),
+	}
+
+	cli.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose logging")
+	cli.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		if verbose, _ := cmd.Flags().GetBool("verbose"); verbose {
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		}
 	}
 
 	cli.SetHelpCommand(&cobra.Command{
@@ -78,8 +91,6 @@ func (c *CLI) Run(args []string) int {
 			Str("command", command).
 			Msg("command ran successfully")
 
-		return 0
-	} else if err == nil {
 		return 0
 	} else if statusErr, ok := err.(*StatusError); ok { //nolint:errorlint // A status error would only exist at the top level of the error chain.
 		_, _ = fmt.Fprintf(c.Err(), "Error: %s\n", statusErr.Status)
@@ -118,6 +129,7 @@ func New(opts ...Opt) *CLI {
 		out: os.Stdout,
 		err: os.Stderr,
 		in:  os.Stdin,
+		log: zerolog.Nop(),
 	}
 
 	for _, opt := range opts {
@@ -156,6 +168,12 @@ func WithStdin(in Stdin) Opt {
 func WithStderr(err io.Writer) Opt {
 	return func(c *CLI) {
 		c.err = err
+	}
+}
+
+func WithLogger(log zerolog.Logger) Opt {
+	return func(c *CLI) {
+		c.log = log
 	}
 }
 
