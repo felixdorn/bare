@@ -1,6 +1,5 @@
 url = 'http://127.0.0.1:8000'
 output = 'dist/'
-
 workers_count = 10
 
 [js]
@@ -9,5 +8,5 @@ wait_for = 2000
 
 [pages]
 entrypoints = ['/']
+extract_only = []
 exclude = []
-include = []

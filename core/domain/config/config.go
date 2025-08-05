@@ -16,8 +16,10 @@ type Pages struct {
 }
 
 type JS struct {
-	Enabled bool          `toml:"enabled"`
-	Wait    time.Duration `toml:"wait_for"`
+	Enabled        bool          `toml:"enabled"`
+	Wait           time.Duration `toml:"wait_for"`
+	ExecutablePath string        `toml:"executable_path,omitempty"`
+	Flags          []string      `toml:"flags,omitempty"`
 }
 
 type Config struct {
@@ -55,8 +57,10 @@ func NewDefaultConfig() *Config {
 		Output:       "dist/",
 		WorkersCount: 10,
 		JS: JS{
-			Enabled: false,
-			Wait:    2 * time.Second,
+			Enabled:        false,
+			Wait:           2000,
+			ExecutablePath: "",
+			Flags:          []string{},
 		},
 		Pages: Pages{
 			Entrypoints: url.Paths{"/"},

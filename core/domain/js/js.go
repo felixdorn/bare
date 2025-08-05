@@ -39,7 +39,16 @@ func (j *JS) Run(ctx context.Context) ([]*url.URL, error) {
 	j.log.Info().Msg("Starting JavaScript-based crawl to discover assets...")
 
 	// create context
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), chromedp.DefaultExecAllocatorOptions[:]...)
+	allocatorOptions := chromedp.DefaultExecAllocatorOptions[:]
+	if j.config.JS.ExecutablePath != "" {
+		allocatorOptions = append(allocatorOptions, chromedp.ExecPath(j.config.JS.ExecutablePath))
+	}
+
+	for _, flag := range j.config.JS.Flags {
+		allocatorOptions = append(allocatorOptions, chromedp.Flag(flag))
+	}
+
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
 	defer cancel()
 
 	opts := []chromedp.ContextOption{}
