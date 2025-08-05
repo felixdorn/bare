@@ -70,39 +70,23 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           # Set the output binary name, adding .exe for Windows.
-          binary_name="bare"
+          binary_name="bare-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            binary_name="bare.exe"
+            binary_name+=".exe"
           fi
-
-          output_dir="bare-${{ matrix.goos }}-${{ matrix.goarch }}"
-          mkdir -p "$output_dir"
 
           # Build the binary, injecting version and commit information.
           # -s -w flags strip debug information, reducing the binary size.
           CGO_ENABLED=0 go build -v \
-            -o "$output_dir/$binary_name" \
+            -o "$binary_name" \
             -ldflags="-s -w -X 'github.com/felixdorn/bare/core/static.Version=${{ env.VERSION }}' -X 'github.com/felixdorn/bare/core/static.Commit=${{ github.sha }}'" \
             main.go
-
-      - name: Package binary
-        run: |
-          output_dir="bare-${{ matrix.goos }}-${{ matrix.goarch }}"
-          cd "$output_dir"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip "../bare-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip" *
-          else
-            tar -czvf "../bare-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" *
-          fi
-          cd ..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            bare-*.tar.gz
-            bare-*.zip
+          path: bare-*
 
   release:
     name: Create GitHub Release
