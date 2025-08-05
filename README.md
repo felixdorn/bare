@@ -78,7 +78,7 @@ And then tell Bare to look for it:
 [pages]
 entrypoints = []
 extract-only = ['/_/list-of-undiscoverable-pages']
-// ...
+# ...
 ```
 
 ### How to handle JavaScript?
@@ -104,7 +104,7 @@ wait_for = 2000 # milliseconds
 ### How to exclude pages?
 
 * Option #1: the `--exclude` option
-```toml
+```bash
 bare export http://localhost:8000 -o dist/ --exclude "/internal/**" --exclude /api/*/internal --exclude /secret-page
 ```
 > Tip: You can use the shorthand flag `-E` in place of `--exclude``
