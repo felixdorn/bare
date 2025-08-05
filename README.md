@@ -70,7 +70,7 @@ entrypoints = ['/', '/some-hidden-page']
 
 * If you don't know their path in advance.
 
-A common pattern is to create a new route in your framework, for example, `/_/list-of-undiscoverable-pages`, which contains a list of links to all of the otherwise undiscoverable pages.
+A common pattern is to create a new route server-side, for example, `/_/list-of-undiscoverable-pages`, which contains a list of links to all of the otherwise undiscoverable pages.
 
 And then tell Bare to look for it:
 ```toml
