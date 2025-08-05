@@ -70,7 +70,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           # Set the output binary name, adding .exe for Windows.
-          binary_name="bare-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          binary_name="bare-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             binary_name+=".exe"
           fi

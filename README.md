@@ -16,11 +16,16 @@ Bare takes a ready-for-deployment snapshot of your locally-hosted dynamic hosted
 
 ### Getting started
 
-Install `bare`:
+Install `bare` via `go`:
 ```
 go install github.com/felixdorn/bare@latest
 ```
 [How to install "go"?](https://go.dev/doc/install)
+
+Or download a binary from the [releases page](https://github.com/felixdorn/bare/releases). For Linux (amd64):
+```bash
+curl -L https://github.com/felixdorn/bare/releases/latest/download/bare-linux-amd64 -o bare && chmod +x bare
+```
 
 Then export your site:
 ```bash
