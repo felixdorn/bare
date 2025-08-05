@@ -129,7 +129,7 @@ func TestClient_GetPage(t *testing.T) {
 			assert.True(t, len(bodyBytes) > 0, "Page body should not be empty")
 
 			// Check links
-			var foundLinks []string
+			foundLinks := []string{}
 			for _, link := range page.Links {
 				// We only care about the path part for comparison
 				foundLinks = append(foundLinks, link.RequestURI())
