@@ -1,0 +1,133 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.1'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run tests
+        run: go test -v ./...
+
+  build:
+    name: Build binaries
+    # This job only runs when a new tag is pushed.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      # We want to build for all these platforms.
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.1'
+
+      - name: Get version from tag
+        id: get_version
+        # The GITHUB_REF variable contains the full ref, e.g., "refs/tags/v1.0.0".
+        # This command strips the "refs/tags/" prefix to get just the version number.
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          # Set the output binary name, adding .exe for Windows.
+          binary_name="bare"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            binary_name="bare.exe"
+          fi
+
+          output_dir="bare-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir -p "$output_dir"
+
+          # Build the binary, injecting version and commit information.
+          # -s -w flags strip debug information, reducing the binary size.
+          CGO_ENABLED=0 go build -v \
+            -o "$output_dir/$binary_name" \
+            -ldflags="-s -w -X 'github.com/felixdorn/bare/core/static.Version=${{ env.VERSION }}' -X 'github.com/felixdorn/bare/core/static.Commit=${{ github.sha }}'" \
+            main.go
+
+      - name: Package binary
+        run: |
+          output_dir="bare-${{ matrix.goos }}-${{ matrix.goarch }}"
+          cd "$output_dir"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip "../bare-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip" *
+          else
+            tar -czvf "../bare-${{ env.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" *
+          fi
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            bare-*.tar.gz
+            bare-*.zip
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # This permission is required to create a release.
+
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: release-assets
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          # The files to upload as release assets.
+          files: release-assets/*
+          # The tag for this release.
+          tag_name: ${{ env.VERSION }}
+          # Automatically generate release notes from commit messages.
+          generate_release_notes: true
