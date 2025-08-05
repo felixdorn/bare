@@ -100,7 +100,7 @@ bare export http://localhost:8000 -o dist/ --with-js
 enabled = true
 wait_for = 2000 # milliseconds
 executable_path = "/usr/bin/google-chrome-stable" # optional
-flags = ["--no-sandbox"] # optional
+flags = ["no-sandbox", "headless=new"] # optional
 ```
 
 ### How to exclude pages?

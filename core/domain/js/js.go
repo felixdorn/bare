@@ -2,6 +2,7 @@ package js
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/chromedp/cdproto/network"
@@ -45,7 +46,13 @@ func (j *JS) Run(ctx context.Context) ([]*url.URL, error) {
 	}
 
 	for _, flag := range j.config.JS.Flags {
-		allocatorOptions = append(allocatorOptions, chromedp.Flag(flag))
+		flag = strings.TrimPrefix(flag, "--")
+		parts := strings.SplitN(flag, "=", 2)
+		if len(parts) == 1 {
+			allocatorOptions = append(allocatorOptions, chromedp.Flag(parts[0], true))
+		} else {
+			allocatorOptions = append(allocatorOptions, chromedp.Flag(parts[0], parts[1]))
+		}
 	}
 
 	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
