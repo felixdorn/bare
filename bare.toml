@@ -1,7 +1,13 @@
 url = 'http://127.0.0.1:8000'
 output = 'dist/'
 
+workers_count = 10
+
+[js]
+enabled = false
+wait_for = 2000
+
 [pages]
-crawl = ['/']
+entrypoints = ['/']
 exclude = []
 include = []

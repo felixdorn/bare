@@ -10,39 +10,33 @@ import (
 )
 
 type Pages struct {
-	Crawl   url.Paths `toml:"crawl"`
-	Exclude url.Paths `toml:"exclude"`
-	Include url.Paths `toml:"include"`
+	Entrypoints url.Paths `toml:"entrypoints"`
+	ExtractOnly url.Paths `toml:"extract_only"`
+	Exclude     url.Paths `toml:"exclude"`
+}
+
+type JS struct {
+	Enabled bool          `toml:"enabled"`
+	Wait    time.Duration `toml:"wait_for"`
 }
 
 type Config struct {
-	URL    *url.URL `toml:"url"`
-	Output string   `toml:"output"`
-	JSWait time.Duration `toml:"js_wait"`
+	URL          *url.URL `toml:"url"`
+	Output       string   `toml:"output"`
+	WorkersCount int      `toml:"workers_count"`
 
+	JS    JS    `toml:"js"`
 	Pages Pages `toml:"pages"`
 }
 
-// IsURLAllowed checks if a URL is allowed based on the include and exclude rules.
+// IsURLAllowed checks if a URL is allowed based on the exclude rules.
 func (c *Config) IsURLAllowed(u *url.URL) bool {
-	// Exclude rules have precedence
-	for _, p := range c.Pages.Exclude {
-		if p.Matches(u.Path) {
-			return false
-		}
-	}
+	return !c.Pages.Exclude.MatchAny(u.Path)
+}
 
-	if len(c.Pages.Include) == 0 {
-		return true
-	}
-
-	for _, p := range c.Pages.Include {
-		if p.Matches(u.Path) {
-			return true
-		}
-	}
-
-	return false
+// IsExtractOnly checks if a URL should only have its links extracted without saving its content.
+func (c *Config) IsExtractOnly(u *url.URL) bool {
+	return c.Pages.ExtractOnly.MatchAny(u.Path)
 }
 
 func (c Config) Export() ([]byte, error) {
@@ -57,13 +51,17 @@ func (c Config) Export() ([]byte, error) {
 func NewDefaultConfig() *Config {
 	defaultURL, _ := url.Parse("http://127.0.0.1:8000")
 	return &Config{
-		URL:    defaultURL,
-		Output: "dist/",
-		JSWait: 2 * time.Second,
+		URL:          defaultURL,
+		Output:       "dist/",
+		WorkersCount: 10,
+		JS: JS{
+			Enabled: false,
+			Wait:    2 * time.Second,
+		},
 		Pages: Pages{
-			Crawl:   url.Paths{"/"},
-			Exclude: url.Paths{},
-			Include: url.Paths{},
+			Entrypoints: url.Paths{"/"},
+			ExtractOnly: url.Paths{},
+			Exclude:     url.Paths{},
 		},
 	}
 }
@@ -78,6 +76,14 @@ func Get() (*Config, error) {
 	err = toml.Unmarshal(contents, &c)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse bare.toml: %w", err)
+	}
+
+	if c.WorkersCount == 0 {
+		c.WorkersCount = 10
+	}
+
+	if len(c.Pages.Entrypoints) == 0 {
+		c.Pages.Entrypoints = []url.Path{"/"}
 	}
 
 	return &c, nil

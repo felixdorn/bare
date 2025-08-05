@@ -87,7 +87,7 @@ func (c *CLI) Run(args []string) int {
 
 	if err := cli.Execute(); err == nil {
 		c.log.
-			Info().
+			Debug().
 			Str("command", command).
 			Msg("command ran successfully")
 

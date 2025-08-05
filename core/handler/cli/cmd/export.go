@@ -11,6 +11,7 @@ import (
 
 	"github.com/felixdorn/bare/core/domain/config"
 	"github.com/felixdorn/bare/core/domain/exporter"
+	"github.com/felixdorn/bare/core/domain/httpclient"
 	"github.com/felixdorn/bare/core/domain/js"
 	"github.com/felixdorn/bare/core/domain/rewriter"
 	"github.com/felixdorn/bare/core/domain/url"
@@ -45,7 +46,15 @@ func runExport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		conf.Output = output
 	}
 
+	excludes, _ := cmd.Flags().GetStringSlice("exclude")
+	for _, p := range excludes {
+		conf.Pages.Exclude = append(conf.Pages.Exclude, url.Path(p))
+	}
+
 	withJS, _ := cmd.Flags().GetBool("with-js")
+	if !cmd.Flags().Changed("with-js") {
+		withJS = conf.JS.Enabled
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -66,23 +75,24 @@ func runExport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		log := c.Log()
 		log.Info().Int("count", len(jsURLs)).Msg("seeding crawler with URLs discovered via JavaScript")
 
-		// Add discovered URLs to the crawl list, avoiding duplicates
-		existingCrawlUrls := make(map[string]struct{})
-		for _, u := range conf.Pages.Crawl {
-			existingCrawlUrls[string(u)] = struct{}{}
+		// Add discovered URLs to the entrypoints list, avoiding duplicates
+		existingEntrypointUrls := make(map[string]struct{})
+		for _, u := range conf.Pages.Entrypoints {
+			existingEntrypointUrls[string(u)] = struct{}{}
 		}
 
 		for _, u := range jsURLs {
 			// we only care about the path and query
 			p := url.Path(u.RequestURI())
-			if _, exists := existingCrawlUrls[string(p)]; !exists {
-				conf.Pages.Crawl = append(conf.Pages.Crawl, p)
-				existingCrawlUrls[string(p)] = struct{}{}
+			if _, exists := existingEntrypointUrls[string(p)]; !exists {
+				conf.Pages.Entrypoints = append(conf.Pages.Entrypoints, p)
+				existingEntrypointUrls[string(p)] = struct{}{}
 			}
 		}
 	}
 
-	export := exporter.NewExport(conf, c.Log())
+	client := httpclient.New(nil)
+	export := exporter.NewExport(conf, c.Log(), client)
 	if err := export.Run(ctx); err != nil {
 		return err
 	}
@@ -110,6 +120,7 @@ The starting URL can be provided as an argument. If not provided, the URL from b
 
 	cmd.Flags().StringP("output", "o", "", "Output directory for the exported site")
 	cmd.Flags().Bool("with-js", false, "Enable JavaScript-based crawling to discover more assets")
+	cmd.Flags().StringSliceP("exclude", "E", []string{}, "Exclude URLs matching a glob pattern (can be used multiple times)")
 
 	return cmd
 }

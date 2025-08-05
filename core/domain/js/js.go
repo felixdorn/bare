@@ -55,7 +55,7 @@ func (j *JS) Run(ctx context.Context) ([]*url.URL, error) {
 	err := chromedp.Run(taskCtx,
 		network.Enable(),
 		chromedp.Navigate(j.config.URL.String()),
-		chromedp.Sleep(j.config.JSWait), // Wait for JS to execute, configurable
+		chromedp.Sleep(j.config.JS.Wait), // Wait for JS to execute, configurable
 	)
 
 	if err != nil {
@@ -90,7 +90,7 @@ func (j *JS) listenForNetworkEvents(ctx context.Context) {
 				return
 			}
 
-			// Apply include/exclude rules from config
+			// Apply exclude rules from config
 			if !j.config.IsURLAllowed(u) {
 				return
 			}

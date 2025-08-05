@@ -26,20 +26,22 @@ type Export struct {
 	Conf    *config.Config
 	baseURL *url.URL
 	log     zerolog.Logger
+	client  *httpclient.Client
 }
 
 // NewExport creates a new Export instance.
-func NewExport(conf *config.Config, log zerolog.Logger) *Export {
+func NewExport(conf *config.Config, log zerolog.Logger, client *httpclient.Client) *Export {
 	return &Export{
 		Conf:    conf,
 		baseURL: conf.URL,
 		log:     log,
+		client:  client,
 	}
 }
 
 // Run executes the export process using a centralized controller model.
 func (e *Export) Run(ctx context.Context) error {
-	const numWorkers = 10
+	numWorkers := e.Conf.WorkersCount
 	e.log.Debug().Msg("Starting export with centralized controller")
 
 	tasksChan := make(chan *url.URL, numWorkers)
@@ -58,18 +60,19 @@ func (e *Export) Run(ctx context.Context) error {
 	visited := make(map[string]bool)
 	activeWorkers := 0
 
-	// Seed the queue with initial crawl paths
-	for _, p := range e.Conf.Pages.Crawl {
+	fmt.Println(e.Conf.Pages.Entrypoints)
+	//
+	// Seed the queue with initial entrypoints
+	for _, p := range e.Conf.Pages.Entrypoints {
 		u, err := url.Parse(string(p))
 		if err != nil {
-			e.log.Error().Err(err).Str("path", string(p)).Msg("Invalid crawl path in config")
+			e.log.Error().Err(err).Str("path", string(p)).Msg("Invalid entrypoint path in config")
 			continue
 		}
 		resolvedURL := e.baseURL.ResolveReference(u)
 
-		// A URL is skipped if it's in the exclude list and not in the include list.
-		if e.Conf.Pages.Exclude.MatchAny(resolvedURL.Path) && !e.Conf.Pages.Include.MatchAny(resolvedURL.Path) {
-			e.log.Debug().Str("url", resolvedURL.String()).Msg("Skipping excluded initial URL")
+		if !e.Conf.IsURLAllowed(resolvedURL) {
+			e.log.Debug().Str("url", resolvedURL.String()).Msg("Skipping disallowed initial URL")
 			continue
 		}
 
@@ -121,8 +124,8 @@ controllerLoop:
 					if !visited[link.String()] {
 						// Mark as visited immediately to prevent duplicates in the queue.
 						visited[link.String()] = true
-						if e.Conf.Pages.Exclude.MatchAny(link.Path) && !e.Conf.Pages.Include.MatchAny(link.Path) {
-							e.log.Debug().Str("url", link.String()).Msg("Skipping excluded URL")
+						if !e.Conf.IsURLAllowed(link) {
+							e.log.Debug().Str("url", link.String()).Msg("Skipping disallowed URL")
 							continue
 						}
 						queue = append(queue, link)
@@ -172,35 +175,40 @@ func (e *Export) worker(ctx context.Context, id int, wg *sync.WaitGroup, tasks <
 
 	for pageURL := range tasks {
 
-
 		log.Debug().Str("url", pageURL.String()).Msg("Received task")
-		page, err := httpclient.GetPage(ctx, pageURL)
+		page, err := e.client.GetPage(ctx, pageURL)
 		if err != nil {
 			results <- workerResult{pageURL: pageURL, err: fmt.Errorf("failed to get page: %w", err)}
 			continue
 		}
 		log.Debug().Str("url", pageURL.String()).Msg("Successfully fetched page")
 
-		path := pageURL.ToPath(e.Conf.Output)
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			results <- workerResult{pageURL: pageURL, err: fmt.Errorf("failed to create directory for %s: %w", path, err)}
-			continue
+		// If the page is NOT marked as extract-only, save its content.
+		if !e.Conf.IsExtractOnly(pageURL) {
+			path := pageURL.ToPath(e.Conf.Output)
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				results <- workerResult{pageURL: pageURL, err: fmt.Errorf("failed to create directory for %s: %w", path, err)}
+				continue
+			}
+
+			file, err := os.Create(path)
+			if err != nil {
+				results <- workerResult{pageURL: pageURL, err: fmt.Errorf("failed to create file %s: %w", path, err)}
+				continue
+			}
+
+			_, err = io.Copy(file, page.Body)
+			_ = file.Close() // Close file regardless of copy error.
+			if err != nil {
+				results <- workerResult{pageURL: pageURL, err: fmt.Errorf("failed to write file %s: %w", path, err)}
+				continue
+			}
+			log.Info().Str("url", pageURL.String()).Str("path", path).Msg("Exported page")
+		} else {
+			log.Info().Str("url", pageURL.String()).Msg("Extracting links only, skipping save")
 		}
 
-		file, err := os.Create(path)
-		if err != nil {
-			results <- workerResult{pageURL: pageURL, err: fmt.Errorf("failed to create file %s: %w", path, err)}
-			continue
-		}
-
-		_, err = io.Copy(file, page.Body)
-		_ = file.Close() // Close file regardless of copy error.
-		if err != nil {
-			results <- workerResult{pageURL: pageURL, err: fmt.Errorf("failed to write file %s: %w", path, err)}
-			continue
-		}
-		log.Info().Str("url", pageURL.String()).Str("path", path).Msg("Exported page")
-
+		// Always send the found links back to the controller.
 		results <- workerResult{pageURL: pageURL, foundURLs: page.Links}
 	}
 
