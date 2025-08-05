@@ -52,7 +52,7 @@ func (c *CLI) Log() zerolog.Logger {
 // and returns the exit code for the command.
 func (c *CLI) Run(args []string) int {
 	cli := &cobra.Command{
-		Use:           "bin",
+		Use:           "bare",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		CompletionOptions: cobra.CompletionOptions{
