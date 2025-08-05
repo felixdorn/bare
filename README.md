@@ -118,4 +118,4 @@ exclude = ['/internal/**', '/api/v1/internal', '/secret-page']
 ```
 
 ### Why the name?
-Bare is named after my last philosophy professor, whose last name was Barrera. It also serves as a statement that vaguely gestures at the stupid incentives that lead to stupid choices. [Do](https://www.effectivealtruism.org/) [useful](https://www.givingwhatwecan.org/pledge) [things](https://veganoutreach.org/why-vegan/).
+Bare is named after my last philosophy professor, whose last name was Barrera. It also serves as a statement that vaguely gestures at the stupid incentives that lead to bloat. [Do](https://www.effectivealtruism.org/) [useful](https://www.givingwhatwecan.org/pledge) [things](https://veganoutreach.org/why-vegan/).
