@@ -90,9 +90,9 @@ extract-only = ['/_/list-of-undiscoverable-pages']
 
 Bare can find pages and assets that would otherwise be missed by not executing your Javascript code.
 
-* Option #1: the `--with-js` option
+* Option #1: the `--js-enabled` option
 ```bash
-bare export http://localhost:8000 -o dist/ --with-js
+bare export http://localhost:8000 -o dist/ --js-enabled
 ```
 
 * Option #2: Set `js.enabled` to true in `bare.toml`

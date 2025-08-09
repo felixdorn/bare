@@ -60,8 +60,6 @@ func (e *Export) Run(ctx context.Context) error {
 	visited := make(map[string]bool)
 	activeWorkers := 0
 
-	fmt.Println(e.Conf.Pages.Entrypoints)
-	//
 	// Seed the queue with initial entrypoints
 	for _, p := range e.Conf.Pages.Entrypoints {
 		u, err := url.Parse(string(p))
