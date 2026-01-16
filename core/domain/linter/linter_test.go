@@ -1066,6 +1066,150 @@ func TestLinter_RedirectBroken_SuccessfulRedirect(t *testing.T) {
 	assert.Nil(t, found, "should not trigger for successful redirect")
 }
 
+func TestLinter_LocalhostLink_127001WithPort(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://127.0.0.1:1234/test">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "localhost-link")
+	assert.NotNil(t, found, "expected localhost-link lint for 127.0.0.1 with port")
+	assert.Equal(t, linter.Critical, found.Severity)
+	assert.Equal(t, linter.Links, found.Category)
+	assert.Contains(t, found.Evidence, "127.0.0.1:1234")
+}
+
+func TestLinter_LocalhostLink_127001WithoutPort(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://127.0.0.1/test">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "localhost-link")
+	assert.NotNil(t, found, "expected localhost-link lint for 127.0.0.1 without port")
+}
+
+func TestLinter_LocalhostLink_LocalhostWithPort(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://localhost:8080/test">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "localhost-link")
+	assert.NotNil(t, found, "expected localhost-link lint for localhost with port")
+	assert.Contains(t, found.Evidence, "localhost:8080")
+}
+
+func TestLinter_LocalhostLink_LocalhostWithoutPort(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://localhost/test">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "localhost-link")
+	assert.NotNil(t, found, "expected localhost-link lint for localhost without port")
+}
+
+func TestLinter_LocalhostLink_CaseInsensitive(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://LOCALHOST/test">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "localhost-link")
+	assert.NotNil(t, found, "should detect LOCALHOST case-insensitively")
+}
+
+func TestLinter_LocalhostLink_MultipleLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://localhost/one">One</a>
+<a href="http://127.0.0.1/two">Two</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "localhost-link" {
+			count++
+		}
+	}
+	assert.Equal(t, 2, count, "should detect both localhost links")
+}
+
+func TestLinter_LocalhostLink_NoLocalhostLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com/test">Test</a>
+<a href="/relative">Relative</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "localhost-link")
+	assert.Nil(t, found, "should not trigger for normal links")
+}
+
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
 	for _, l := range lints {
 		if l.Rule == ruleID {
