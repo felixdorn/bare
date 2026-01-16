@@ -152,7 +152,10 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 			}
 
 			// Run linting rules
-			lints, err := linter.Check(page.Body, page.URL, analysis)
+			lints, err := linter.Check(page.Body, page.URL, analysis, linter.CheckOptions{
+				StatusCode:    page.StatusCode,
+				RedirectChain: page.RedirectChain,
+			})
 			if err != nil {
 				log.Error().Err(err).Str("url", page.URL.String()).Msg("Failed to lint page")
 				lints = nil

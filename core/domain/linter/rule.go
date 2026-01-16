@@ -3,15 +3,18 @@ package linter
 import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/felixdorn/bare/core/domain/analyzer"
+	"github.com/felixdorn/bare/core/domain/crawler"
 	"github.com/felixdorn/bare/core/domain/url"
 )
 
 // Context is passed to every rule check and contains everything a rule might need
 type Context struct {
-	Doc      *goquery.Document
-	URL      *url.URL
-	Body     []byte
-	Analysis *analyzer.Analysis
+	Doc           *goquery.Document
+	URL           *url.URL
+	Body          []byte
+	Analysis      *analyzer.Analysis
+	StatusCode    int
+	RedirectChain []crawler.Redirect
 }
 
 // Lint is a single issue found by a rule

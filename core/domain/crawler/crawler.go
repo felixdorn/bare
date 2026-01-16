@@ -21,13 +21,14 @@ type Link struct {
 
 // Page represents a crawled page with its metadata and content.
 type Page struct {
-	URL         *url.URL
-	StatusCode  int
-	Body        []byte // raw HTML
-	Links       []Link // ALL links (internal + external)
-	Title       string
-	Description string
-	Canonical   string
+	URL           *url.URL
+	StatusCode    int
+	Body          []byte // raw HTML
+	Links         []Link // ALL links (internal + external)
+	Title         string
+	Description   string
+	Canonical     string
+	RedirectChain []Redirect
 }
 
 // Config holds the crawler configuration.
@@ -249,10 +250,11 @@ func (c *Crawler) fetchPage(ctx context.Context, pageURL *url.URL) (*Page, error
 	}
 
 	page := &Page{
-		URL:        pageURL,
-		StatusCode: result.StatusCode,
-		Body:       result.Body,
-		Links:      []Link{},
+		URL:           pageURL,
+		StatusCode:    result.StatusCode,
+		Body:          result.Body,
+		Links:         []Link{},
+		RedirectChain: result.RedirectChain,
 	}
 
 	// Parse HTML for metadata and links

@@ -10,10 +10,17 @@ import (
 	"github.com/felixdorn/bare/core/domain/url"
 )
 
+// Redirect represents a single redirect in a chain.
+type Redirect struct {
+	URL        string
+	StatusCode int
+}
+
 // FetchResult contains the raw response from fetching a URL.
 type FetchResult struct {
-	StatusCode int
-	Body       []byte
+	StatusCode    int
+	Body          []byte
+	RedirectChain []Redirect // Ordered list of redirects (empty if no redirects)
 }
 
 // Fetcher abstracts how pages are fetched.
@@ -29,28 +36,46 @@ type Fetcher interface {
 
 // HTTPFetcher fetches pages using a standard HTTP client.
 type HTTPFetcher struct {
-	client *http.Client
+	timeout time.Duration
 }
 
 // NewHTTPFetcher creates a new HTTPFetcher.
 // If client is nil, a default client with 10 second timeout is used.
 func NewHTTPFetcher(client *http.Client) *HTTPFetcher {
-	if client == nil {
-		client = &http.Client{
-			Timeout: 10 * time.Second,
-		}
+	timeout := 10 * time.Second
+	if client != nil && client.Timeout > 0 {
+		timeout = client.Timeout
 	}
-	return &HTTPFetcher{client: client}
+	return &HTTPFetcher{timeout: timeout}
 }
 
 // Fetch retrieves the content at the given URL using HTTP GET.
 func (f *HTTPFetcher) Fetch(ctx context.Context, u *url.URL) (*FetchResult, error) {
+	var chain []Redirect
+
+	client := &http.Client{
+		Timeout: f.timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 0 {
+				prev := via[len(via)-1]
+				chain = append(chain, Redirect{
+					URL:        prev.URL.String(),
+					StatusCode: prev.Response.StatusCode,
+				})
+			}
+			if len(via) >= 10 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not create request: %w", err)
 	}
 
-	resp, err := f.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("could not reach %s: %w", u, err)
 	}
@@ -62,8 +87,9 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, u *url.URL) (*FetchResult, erro
 	}
 
 	return &FetchResult{
-		StatusCode: resp.StatusCode,
-		Body:       body,
+		StatusCode:    resp.StatusCode,
+		Body:          body,
+		RedirectChain: chain,
 	}, nil
 }
 

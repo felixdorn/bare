@@ -85,13 +85,24 @@ func (f *JSFetcher) Fetch(ctx context.Context, u *url.URL) (*FetchResult, error)
 	taskCtx, cancel := chromedp.NewContext(f.allocCtx, browserOpts...)
 	defer cancel()
 
-	// Track the response status code
+	// Track redirects and final status code
+	var chain []Redirect
 	var statusCode int
+
 	chromedp.ListenTarget(taskCtx, func(ev interface{}) {
-		if resp, ok := ev.(*network.EventResponseReceived); ok {
-			// Only track the main document response
-			if resp.Type == network.ResourceTypeDocument {
-				statusCode = int(resp.Response.Status)
+		switch e := ev.(type) {
+		case *network.EventRequestWillBeSent:
+			// Capture redirects - RedirectResponse is set when this request was triggered by a redirect
+			if e.RedirectResponse != nil && e.Type == network.ResourceTypeDocument {
+				chain = append(chain, Redirect{
+					URL:        e.RedirectResponse.URL,
+					StatusCode: int(e.RedirectResponse.Status),
+				})
+			}
+		case *network.EventResponseReceived:
+			// Track the main document response status
+			if e.Type == network.ResourceTypeDocument {
+				statusCode = int(e.Response.Status)
 			}
 		}
 	})
@@ -113,8 +124,9 @@ func (f *JSFetcher) Fetch(ctx context.Context, u *url.URL) (*FetchResult, error)
 	}
 
 	return &FetchResult{
-		StatusCode: statusCode,
-		Body:       []byte(html),
+		StatusCode:    statusCode,
+		Body:          []byte(html),
+		RedirectChain: chain,
 	}, nil
 }
 

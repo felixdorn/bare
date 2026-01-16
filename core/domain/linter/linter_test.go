@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/felixdorn/bare/core/domain/crawler"
 	"github.com/felixdorn/bare/core/domain/linter"
 	_ "github.com/felixdorn/bare/core/domain/linter/rules"
 	"github.com/felixdorn/bare/core/domain/url"
@@ -20,7 +21,7 @@ func TestLinter_MissingTitle(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "missing-title")
@@ -41,7 +42,7 @@ func TestLinter_MultipleTitles(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "multiple-titles")
@@ -66,7 +67,7 @@ func TestLinter_MultipleTitles_IgnoresSVGTitle(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "multiple-titles")
@@ -81,7 +82,7 @@ func TestLinter_MissingH1(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "missing-h1")
@@ -102,7 +103,7 @@ func TestLinter_MultipleH1(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "multiple-h1")
@@ -120,7 +121,7 @@ func TestLinter_ValidPage(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	// A valid page should have no lints
@@ -135,7 +136,7 @@ func TestLinter_EmptyTitle(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "empty-title")
@@ -152,7 +153,7 @@ func TestLinter_EmptyTitle_Whitespace(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "empty-title")
@@ -171,7 +172,7 @@ func TestLinter_TitleOutsideHead(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "title-outside-head")
@@ -194,7 +195,7 @@ func TestLinter_TitleOutsideHead_AllowsSVG(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "title-outside-head")
@@ -209,7 +210,7 @@ func TestLinter_EmptyHTML(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "empty-html")
@@ -227,7 +228,7 @@ func TestLinter_EmptyHTML_WhitespaceOnly(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "empty-html")
@@ -246,7 +247,7 @@ func TestLinter_MetaDescriptionOutsideHead(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-outside-head")
@@ -268,7 +269,7 @@ func TestLinter_MetaDescriptionInHead_Valid(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-outside-head")
@@ -287,7 +288,7 @@ func TestLinter_MissingAlt(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "missing-alt")
@@ -309,7 +310,7 @@ func TestLinter_MissingAlt_EmptyAlt(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "missing-alt")
@@ -328,7 +329,7 @@ func TestLinter_MissingAlt_WithAlt(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "missing-alt")
@@ -347,7 +348,7 @@ func TestLinter_MissingAlt_RolePresentation(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "missing-alt")
@@ -365,7 +366,7 @@ func TestLinter_LoremIpsum(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "lorem-ipsum")
@@ -385,7 +386,7 @@ func TestLinter_LoremIpsum_CaseInsensitive(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "lorem-ipsum")
@@ -403,7 +404,7 @@ func TestLinter_LoremIpsum_NotPresent(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "lorem-ipsum")
@@ -421,7 +422,7 @@ func TestLinter_ShortH1(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "short-h1")
@@ -441,7 +442,7 @@ func TestLinter_ShortH1_TwoWords(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "short-h1")
@@ -460,7 +461,7 @@ func TestLinter_ShortH1_ThreeWords(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "short-h1")
@@ -478,7 +479,7 @@ func TestLinter_LongH1(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "long-h1")
@@ -498,7 +499,7 @@ func TestLinter_LongH1_TenWords(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "long-h1")
@@ -513,7 +514,7 @@ func TestLinter_ShortTitle(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "short-title")
@@ -531,7 +532,7 @@ func TestLinter_ShortTitle_Exactly40(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "short-title")
@@ -546,7 +547,7 @@ func TestLinter_LongTitle(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "long-title")
@@ -563,7 +564,7 @@ func TestLinter_LongTitle_Exactly60(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "long-title")
@@ -582,7 +583,7 @@ func TestLinter_MetaDescriptionTooLong(t *testing.T) {
 </html>`, longDesc))
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-too-long")
@@ -603,7 +604,7 @@ func TestLinter_MetaDescriptionTooLong_Boundary(t *testing.T) {
 </html>`, desc320))
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-too-long")
@@ -621,7 +622,7 @@ func TestLinter_MetaDescriptionTooShort(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-too-short")
@@ -641,7 +642,7 @@ func TestLinter_MetaDescriptionTooShort_Boundary(t *testing.T) {
 </html>`, desc110))
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-too-short")
@@ -659,7 +660,7 @@ func TestLinter_MetaDescriptionTooShort_EmptyDoesNotTrigger(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-too-short")
@@ -677,7 +678,7 @@ func TestLinter_MetaDescriptionTooShort_WhitespaceDoesNotTrigger(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-too-short")
@@ -695,7 +696,7 @@ func TestLinter_MetaDescriptionEmpty(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-empty")
@@ -715,7 +716,7 @@ func TestLinter_MetaDescriptionEmpty_Whitespace(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "meta-description-empty")
@@ -734,7 +735,7 @@ func TestLinter_MultipleMetaDescriptions(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "multiple-meta-descriptions")
@@ -755,7 +756,7 @@ func TestLinter_SingleMetaDescription_NoLint(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "multiple-meta-descriptions")
@@ -773,7 +774,7 @@ func TestLinter_TitleDescriptionSame(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "title-description-same")
@@ -793,7 +794,7 @@ func TestLinter_TitleDescriptionSame_Different(t *testing.T) {
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
-	lints, err := linter.Check(html, pageURL, nil)
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
 	require.NoError(t, err)
 
 	found := findLint(lints, "title-description-same")
@@ -814,6 +815,67 @@ func TestLinter_AllRulesRegistered(t *testing.T) {
 	assert.True(t, ruleIDs["multiple-titles"], "multiple-titles rule not registered")
 	assert.True(t, ruleIDs["missing-h1"], "missing-h1 rule not registered")
 	assert.True(t, ruleIDs["multiple-h1"], "multiple-h1 rule not registered")
+}
+
+func TestLinter_CheckOptions_StatusCode(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	opts := linter.CheckOptions{
+		StatusCode: 404,
+	}
+
+	ctx, err := linter.NewContext(html, pageURL, nil, opts)
+	require.NoError(t, err)
+	assert.Equal(t, 404, ctx.StatusCode)
+}
+
+func TestLinter_CheckOptions_RedirectChain(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/final")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/old", StatusCode: 301},
+		{URL: "http://example.com/middle", StatusCode: 302},
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: chain,
+	}
+
+	ctx, err := linter.NewContext(html, pageURL, nil, opts)
+	require.NoError(t, err)
+	assert.Len(t, ctx.RedirectChain, 2)
+	assert.Equal(t, "http://example.com/old", ctx.RedirectChain[0].URL)
+	assert.Equal(t, 301, ctx.RedirectChain[0].StatusCode)
+	assert.Equal(t, "http://example.com/middle", ctx.RedirectChain[1].URL)
+	assert.Equal(t, 302, ctx.RedirectChain[1].StatusCode)
+}
+
+func TestLinter_CheckOptions_EmptyChain(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: nil,
+	}
+
+	ctx, err := linter.NewContext(html, pageURL, nil, opts)
+	require.NoError(t, err)
+	assert.Empty(t, ctx.RedirectChain)
 }
 
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
