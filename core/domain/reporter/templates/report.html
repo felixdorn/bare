@@ -23,10 +23,6 @@
                 <div class="text-4xl font-bold text-blue-600">{{.TotalPages}}</div>
                 <div class="text-sm text-gray-500">Pages Crawled</div>
             </div>
-            <div class="bg-white p-6 rounded-lg border border-gray-200">
-                <div class="text-4xl font-bold text-blue-600">{{.TotalImages}}</div>
-                <div class="text-sm text-gray-500">Images Found</div>
-            </div>
             {{if .TotalLints}}
             <div class="bg-white p-6 rounded-lg border border-gray-200">
                 <div class="text-4xl font-bold text-orange-600">{{.TotalLints}}</div>
@@ -109,32 +105,6 @@
                     </div>
                 </div>
                 {{end}}
-
-                <div class="border-t border-gray-200">
-                    <button class="images-toggle w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 cursor-pointer flex justify-between items-center text-sm font-medium" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('hidden');">
-                        <span>Images ({{len $page.Images}})</span>
-                        <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div class="hidden p-4 border-t border-gray-200">
-                        {{if $page.Images}}
-                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {{range $page.Images}}
-                            <div class="border border-gray-200 rounded overflow-hidden">
-                                <div class="aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
-                                    <img src="{{.URL}}" alt="{{.Alt}}" loading="lazy" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'">
-                                </div>
-                                <div class="p-3 text-xs">
-                                    <div class="text-gray-900 break-words">{{if .Alt}}{{.Alt}}{{else}}<span class="text-yellow-600 italic">(no alt text)</span>{{end}}</div>
-                                    <div class="text-gray-500 font-mono break-all mt-1">{{.Src}}</div>
-                                </div>
-                            </div>
-                            {{end}}
-                        </div>
-                        {{else}}
-                        <div class="text-gray-500 italic text-center py-4">No images found on this page</div>
-                        {{end}}
-                    </div>
-                </div>
             </article>
             {{end}}
         </div>

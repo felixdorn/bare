@@ -6,7 +6,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/felixdorn/bare/core/domain/analyzer"
 	"github.com/felixdorn/bare/core/domain/linter"
 )
 
@@ -26,7 +25,6 @@ type PageReport struct {
 	Description   string
 	Canonical     string
 	StatusCode    int
-	Images        []analyzer.Image
 	Lints         []linter.Lint
 	InternalLinks []InternalLink // Internal links found on this page
 }
@@ -37,7 +35,6 @@ type Report struct {
 	GeneratedAt time.Time
 	Pages       []PageReport
 	TotalPages  int
-	TotalImages int
 	TotalLints  int
 	LintCounts  map[string]int
 }
@@ -65,12 +62,10 @@ func New() (*Reporter, error) {
 func (r *Reporter) Generate(w io.Writer, report *Report) error {
 	// Calculate totals
 	report.TotalPages = len(report.Pages)
-	report.TotalImages = 0
 	report.TotalLints = 0
 	report.LintCounts = make(map[string]int)
 
 	for _, p := range report.Pages {
-		report.TotalImages += len(p.Images)
 		report.TotalLints += len(p.Lints)
 		for _, l := range p.Lints {
 			report.LintCounts[string(l.Severity)]++

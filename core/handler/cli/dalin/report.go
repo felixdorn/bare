@@ -195,7 +195,6 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 				Description:   analysis.Description,
 				Canonical:     analysis.Canonical,
 				StatusCode:    page.StatusCode,
-				Images:        analysis.Images,
 				Lints:         lints,
 				InternalLinks: internalLinks,
 			}
@@ -206,7 +205,6 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 
 			log.Info().
 				Str("url", page.URL.String()).
-				Int("images", len(analysis.Images)).
 				Int("lints", len(lints)).
 				Msg("Analyzed page")
 		},
