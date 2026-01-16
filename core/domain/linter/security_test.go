@@ -189,27 +189,6 @@ func TestLinter_MixedContent_HTTPEmbed(t *testing.T) {
 	assert.Contains(t, found.Evidence, "http://example.com/embed.swf")
 }
 
-func TestLinter_MixedContent_HTTPFormAction(t *testing.T) {
-	html := []byte(`<!DOCTYPE html>
-<html>
-<head><title>Page</title></head>
-<body>
-<h1>Hello</h1>
-<form action="http://example.com/submit">
-  <input type="submit">
-</form>
-</body>
-</html>`)
-
-	pageURL, _ := url.Parse("https://example.com/")
-	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
-	require.NoError(t, err)
-
-	found := findLint(lints, "mixed-content")
-	assert.NotNil(t, found, "expected mixed-content lint for HTTP form action on HTTPS page")
-	assert.Contains(t, found.Evidence, "http://example.com/submit")
-}
-
 func TestLinter_MixedContent_HTTPVideoPoster(t *testing.T) {
 	html := []byte(`<!DOCTYPE html>
 <html>
@@ -702,4 +681,233 @@ func TestLinter_HTTPSLinksToHTTP_SkipsSpecialSchemes(t *testing.T) {
 
 	found := findLint(lints, "https-links-to-http")
 	assert.Nil(t, found, "special schemes should not trigger")
+}
+
+// HTTPS form to HTTP tests
+
+func TestLinter_HTTPSFormToHTTP_FormPOST(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="http://example.com/form_submit.php" method="POST">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-form-to-http")
+	assert.NotNil(t, found, "expected https-form-to-http lint for form POST to HTTP")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.Security, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+	assert.Contains(t, found.Evidence, "http://example.com/form_submit.php")
+}
+
+func TestLinter_HTTPSFormToHTTP_FormGET(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="http://example.com/search" method="GET">
+  <input type="text" name="q">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-form-to-http")
+	assert.NotNil(t, found, "expected https-form-to-http lint for form GET to HTTP")
+	assert.Contains(t, found.Evidence, "http://example.com/search")
+}
+
+func TestLinter_HTTPSFormToHTTP_FormNoMethod(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="http://example.com/form_submit.php">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-form-to-http")
+	assert.NotNil(t, found, "expected https-form-to-http lint for form without method to HTTP")
+}
+
+func TestLinter_HTTPSFormToHTTP_FormToHTTPS(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="https://example.com/form_submit.php" method="POST">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-form-to-http")
+	assert.Nil(t, found, "form to HTTPS should not trigger")
+}
+
+func TestLinter_HTTPSFormToHTTP_RelativeAction(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="/submit" method="POST">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-form-to-http")
+	assert.Nil(t, found, "relative action should inherit HTTPS and not trigger")
+}
+
+func TestLinter_HTTPSFormToHTTP_HTTPPage(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="http://example.com/form_submit.php" method="POST">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	// HTTP page - should not trigger this rule
+	pageURL, _ := url.Parse("http://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-form-to-http")
+	assert.Nil(t, found, "HTTP pages should not trigger this rule")
+}
+
+func TestLinter_HTTPSFormToHTTP_MultipleForms(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="http://example.com/form1" method="POST">
+  <input type="submit">
+</form>
+<form action="http://example.com/form2" method="POST">
+  <input type="submit">
+</form>
+<form action="https://example.com/form3" method="POST">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "https-form-to-http" {
+			count++
+		}
+	}
+	assert.Equal(t, 2, count, "should detect both HTTP form actions")
+}
+
+func TestLinter_HTTPSFormToHTTP_DuplicateActionsReportedOnce(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="http://example.com/submit" method="POST">
+  <input type="submit">
+</form>
+<form action="http://example.com/submit" method="GET">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "https-form-to-http" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "duplicate actions should only be reported once")
+}
+
+func TestLinter_HTTPSFormToHTTP_ExternalHTTPForm(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="http://other-site.com/submit" method="POST">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	// External HTTP forms are also a security issue
+	found := findLint(lints, "https-form-to-http")
+	assert.NotNil(t, found, "external HTTP form actions should also trigger")
+}
+
+func TestLinter_HTTPSFormToHTTP_JavascriptAction(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<form action="javascript:submitForm()">
+  <input type="submit">
+</form>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-form-to-http")
+	assert.Nil(t, found, "javascript: action should not trigger")
 }

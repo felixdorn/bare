@@ -126,13 +126,6 @@ func init() {
 			}
 		})
 
-		// Check form actions
-		ctx.Doc.Find("form[action]").Each(func(i int, s *goquery.Selection) {
-			if action, exists := s.Attr("action"); exists {
-				checkURL(action)
-			}
-		})
-
 		return lints
 	}
 	linter.Register(mixedContent)
@@ -208,4 +201,55 @@ func init() {
 		return lints
 	}
 	linter.Register(httpsLinksToHTTP)
+
+	httpsFormToHTTP := &linter.Rule{
+		ID:       "https-form-to-http",
+		Name:     "HTTPS page contains form posting to HTTP",
+		Severity: linter.High,
+		Category: linter.Security,
+		Tag:      linter.Issue,
+	}
+	httpsFormToHTTP.Check = func(ctx *linter.Context) []linter.Lint {
+		// Only applies to HTTPS pages
+		if ctx.URL.Scheme != "https" {
+			return nil
+		}
+
+		var lints []linter.Lint
+		seen := make(map[string]bool)
+
+		ctx.Doc.Find("form[action]").Each(func(i int, s *goquery.Selection) {
+			action, exists := s.Attr("action")
+			if !exists || action == "" {
+				return
+			}
+
+			action = strings.TrimSpace(action)
+
+			// Skip javascript: actions
+			if strings.HasPrefix(strings.ToLower(action), "javascript:") {
+				return
+			}
+
+			// Parse and resolve the URL
+			parsed, err := url.Parse(action)
+			if err != nil {
+				return
+			}
+
+			resolved := ctx.URL.ResolveReference(parsed)
+
+			// Check if the form posts to HTTP
+			if resolved.Scheme == "http" {
+				urlStr := resolved.String()
+				if !seen[urlStr] {
+					seen[urlStr] = true
+					lints = append(lints, httpsFormToHTTP.Emit(urlStr))
+				}
+			}
+		})
+
+		return lints
+	}
+	linter.Register(httpsFormToHTTP)
 }
