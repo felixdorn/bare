@@ -273,6 +273,141 @@ func TestLinter_MetaDescriptionInHead_Valid(t *testing.T) {
 	assert.Nil(t, found, "meta description in head should not trigger lint")
 }
 
+func TestLinter_MissingAlt(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "missing-alt")
+	assert.NotNil(t, found, "expected missing-alt lint")
+	assert.Equal(t, linter.Medium, found.Severity)
+	assert.Equal(t, linter.Opportunity, found.Tag)
+	assert.Contains(t, found.Evidence, "test.png")
+}
+
+func TestLinter_MissingAlt_EmptyAlt(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png" alt="">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "missing-alt")
+	assert.NotNil(t, found, "empty alt should trigger missing-alt lint")
+}
+
+func TestLinter_MissingAlt_WithAlt(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png" alt="A test image">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "missing-alt")
+	assert.Nil(t, found, "image with alt text should not trigger lint")
+}
+
+func TestLinter_MissingAlt_RolePresentation(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="decorative.png" role="presentation">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "missing-alt")
+	assert.Nil(t, found, "decorative image with role=presentation should not trigger lint")
+}
+
+func TestLinter_LoremIpsum(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "lorem-ipsum")
+	assert.NotNil(t, found, "expected lorem-ipsum lint")
+	assert.Equal(t, linter.Medium, found.Severity)
+	assert.Equal(t, linter.Issue, found.Tag)
+}
+
+func TestLinter_LoremIpsum_CaseInsensitive(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<p>LOREM IPSUM dolor sit amet.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "lorem-ipsum")
+	assert.NotNil(t, found, "should detect Lorem Ipsum case-insensitively")
+}
+
+func TestLinter_LoremIpsum_NotPresent(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<p>This is real content with no placeholder text.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "lorem-ipsum")
+	assert.Nil(t, found, "should not trigger without Lorem Ipsum text")
+}
+
 func TestLinter_AllRulesRegistered(t *testing.T) {
 	rules := linter.All()
 	assert.GreaterOrEqual(t, len(rules), 4, "expected at least 4 rules registered")

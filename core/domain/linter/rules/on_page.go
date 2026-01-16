@@ -137,4 +137,45 @@ func init() {
 		return nil
 	}
 	linter.Register(multipleH1)
+
+	missingAlt := &linter.Rule{
+		ID:       "missing-alt",
+		Name:     "Image with missing alt text",
+		Severity: linter.Medium,
+		Category: linter.OnPage,
+		Tag:      linter.Opportunity,
+	}
+	missingAlt.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+		ctx.Doc.Find("img").Each(func(i int, s *goquery.Selection) {
+			// Skip images with role="presentation" (decorative)
+			if role, exists := s.Attr("role"); exists && role == "presentation" {
+				return
+			}
+
+			alt, exists := s.Attr("alt")
+			if !exists || strings.TrimSpace(alt) == "" {
+				src, _ := s.Attr("src")
+				lints = append(lints, missingAlt.Emit(src))
+			}
+		})
+		return lints
+	}
+	linter.Register(missingAlt)
+
+	loremIpsum := &linter.Rule{
+		ID:       "lorem-ipsum",
+		Name:     "Contains Lorem Ipsum dummy text",
+		Severity: linter.Medium,
+		Category: linter.OnPage,
+		Tag:      linter.Issue,
+	}
+	loremIpsum.Check = func(ctx *linter.Context) []linter.Lint {
+		bodyText := strings.ToLower(ctx.Doc.Find("body").Text())
+		if strings.Contains(bodyText, "lorem ipsum") {
+			return []linter.Lint{loremIpsum.Emit("")}
+		}
+		return nil
+	}
+	linter.Register(loremIpsum)
 }
