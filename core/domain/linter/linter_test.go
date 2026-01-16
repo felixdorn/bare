@@ -1783,6 +1783,158 @@ func TestLinter_MalformedHref_IgnoresSpecialSchemes(t *testing.T) {
 	assert.Nil(t, found, "special schemes should not trigger")
 }
 
+func TestLinter_NonHTTPProtocol_FTP(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="ftp://example.com/file.zip">Download</a>
+<a href="/other">Other</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-http-protocol")
+	assert.NotNil(t, found, "expected non-http-protocol lint for ftp")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.PotentialIssue, found.Tag)
+	assert.Contains(t, found.Evidence, "ftp://")
+}
+
+func TestLinter_NonHTTPProtocol_SSH(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="ssh://user@example.com">SSH</a>
+<a href="/other">Other</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-http-protocol")
+	assert.NotNil(t, found, "expected non-http-protocol lint for ssh")
+}
+
+func TestLinter_NonHTTPProtocol_WebSocket(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="ws://example.com/socket">WebSocket</a>
+<a href="/other">Other</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-http-protocol")
+	assert.NotNil(t, found, "expected non-http-protocol lint for ws")
+}
+
+func TestLinter_MalformedHref_InvalidProtocol(t *testing.T) {
+	// gopher and news are not valid protocols - should be malformed
+	testCases := []string{
+		"gopher://example.com/",
+		"news:rec.web",
+		"irc://irc.example.com/channel",
+	}
+
+	for _, href := range testCases {
+		html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="` + href + `">Link</a>
+<a href="/other">Other</a>
+</body>
+</html>`)
+
+		pageURL, _ := url.Parse("http://example.com/")
+		lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+		require.NoError(t, err)
+
+		found := findLint(lints, "malformed-href")
+		assert.NotNil(t, found, "expected malformed-href lint for invalid protocol %s", href)
+	}
+}
+
+func TestLinter_NonHTTPProtocol_HTTPValid(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com/page">HTTP</a>
+<a href="https://example.com/page">HTTPS</a>
+<a href="/relative">Relative</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-http-protocol")
+	assert.Nil(t, found, "http/https should not trigger")
+}
+
+func TestLinter_NonHTTPProtocol_IgnoresSpecialSchemes(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="mailto:test@test.com">Email</a>
+<a href="tel:123">Phone</a>
+<a href="javascript:void(0)">JS</a>
+<a href="/other">Other</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-http-protocol")
+	assert.Nil(t, found, "mailto/tel/javascript should not trigger")
+}
+
+func TestLinter_NonHTTPProtocol_FTPNotMalformed(t *testing.T) {
+	// FTP should trigger non-http-protocol but NOT malformed-href
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="ftp://example.com/file.zip">Download</a>
+<a href="/other">Other</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	malformed := findLint(lints, "malformed-href")
+	assert.Nil(t, malformed, "ftp should NOT trigger malformed-href")
+
+	nonHTTP := findLint(lints, "non-http-protocol")
+	assert.NotNil(t, nonHTTP, "ftp SHOULD trigger non-http-protocol")
+}
+
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
 	for _, l := range lints {
 		if l.Rule == ruleID {

@@ -209,14 +209,23 @@ func init() {
 
 			// Check for malformed absolute URLs
 			if parsed.Scheme != "" {
-				// Has a scheme - check if it's valid
-				if parsed.Scheme == "http" || parsed.Scheme == "https" {
+				scheme := parsed.Scheme
+
+				// Valid protocols list
+				validProtocols := map[string]bool{
+					"blob": true, "data": true, "file": true, "ftp": true,
+					"http": true, "https": true, "javascript": true, "mailto": true,
+					"resource": true, "ssh": true, "tel": true, "urn": true,
+					"view-source": true, "ws": true, "wss": true,
+				}
+
+				if scheme == "http" || scheme == "https" {
 					// http/https must have a host
 					if parsed.Host == "" {
 						lints = append(lints, malformedHref.Emit(href))
 					}
-				} else {
-					// Unknown scheme - likely a typo like htp:// or htps://
+				} else if !validProtocols[scheme] {
+					// Unknown scheme - invalid/malformed
 					lints = append(lints, malformedHref.Emit(href))
 				}
 			}
@@ -225,4 +234,43 @@ func init() {
 		return lints
 	}
 	linter.Register(malformedHref)
+
+	nonHTTPProtocol := &linter.Rule{
+		ID:       "non-http-protocol",
+		Name:     "Has link to a non-HTTP protocol",
+		Severity: linter.High,
+		Category: linter.Links,
+		Tag:      linter.PotentialIssue,
+	}
+	nonHTTPProtocol.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+
+		// Non-HTTP protocols that we flag (valid but unusual for web links)
+		nonHTTPSchemes := map[string]bool{
+			"ftp": true, "file": true, "ssh": true,
+			"ws": true, "wss": true, "blob": true,
+			"urn": true, "resource": true, "view-source": true,
+		}
+
+		ctx.Doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+			href, exists := s.Attr("href")
+			if !exists || href == "" {
+				return
+			}
+
+			href = strings.TrimSpace(href)
+
+			parsed, err := url.Parse(href)
+			if err != nil {
+				return // Handled by malformed-href
+			}
+
+			if nonHTTPSchemes[parsed.Scheme] {
+				lints = append(lints, nonHTTPProtocol.Emit(href))
+			}
+		})
+
+		return lints
+	}
+	linter.Register(nonHTTPProtocol)
 }
