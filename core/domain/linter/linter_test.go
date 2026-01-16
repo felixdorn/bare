@@ -762,6 +762,44 @@ func TestLinter_SingleMetaDescription_NoLint(t *testing.T) {
 	assert.Nil(t, found, "single meta description should not trigger lint")
 }
 
+func TestLinter_TitleDescriptionSame(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>This is a really great page about stuff</title>
+<meta name="description" content="This is a really great page about stuff">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "title-description-same")
+	assert.NotNil(t, found, "expected title-description-same lint")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Equal(t, linter.PotentialIssue, found.Tag)
+}
+
+func TestLinter_TitleDescriptionSame_Different(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="This is a different description">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "title-description-same")
+	assert.Nil(t, found, "should not trigger when title and description differ")
+}
+
 func TestLinter_AllRulesRegistered(t *testing.T) {
 	rules := linter.All()
 	assert.GreaterOrEqual(t, len(rules), 4, "expected at least 4 rules registered")

@@ -138,6 +138,27 @@ func init() {
 	}
 	linter.Register(multipleH1)
 
+	titleDescSame := &linter.Rule{
+		ID:       "title-description-same",
+		Name:     "Title and meta description are the same",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.PotentialIssue,
+	}
+	titleDescSame.Check = func(ctx *linter.Context) []linter.Lint {
+		title := strings.TrimSpace(ctx.Doc.Find("head title").Text())
+		desc, exists := ctx.Doc.Find(`head meta[name="description"]`).Attr("content")
+		if !exists {
+			return nil
+		}
+		desc = strings.TrimSpace(desc)
+		if title != "" && desc != "" && title == desc {
+			return []linter.Lint{titleDescSame.Emit(title)}
+		}
+		return nil
+	}
+	linter.Register(titleDescSame)
+
 	missingAlt := &linter.Rule{
 		ID:       "missing-alt",
 		Name:     "Image with missing alt text",
