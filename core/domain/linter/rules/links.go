@@ -1,12 +1,14 @@
 package rules
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/felixdorn/bare/core/domain/linter"
 )
+
 
 func init() {
 	localhostLink := &linter.Rule{
@@ -165,4 +167,62 @@ func init() {
 		return nil
 	}
 	linter.Register(noOutgoingLinks)
+
+	malformedHref := &linter.Rule{
+		ID:       "malformed-href",
+		Name:     "Has outgoing links with malformed href data",
+		Severity: linter.High,
+		Category: linter.Links,
+		Tag:      linter.Issue,
+	}
+	malformedHref.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+
+		ctx.Doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+			href, exists := s.Attr("href")
+			if !exists || href == "" {
+				return
+			}
+
+			href = strings.TrimSpace(href)
+			hrefLower := strings.ToLower(href)
+
+			// Skip fragment-only links
+			if strings.HasPrefix(href, "#") {
+				return
+			}
+
+			// Skip special schemes
+			if strings.HasPrefix(hrefLower, "javascript:") ||
+				strings.HasPrefix(hrefLower, "mailto:") ||
+				strings.HasPrefix(hrefLower, "tel:") ||
+				strings.HasPrefix(hrefLower, "data:") {
+				return
+			}
+
+			// Try to parse the URL
+			parsed, err := url.Parse(href)
+			if err != nil {
+				lints = append(lints, malformedHref.Emit(href))
+				return
+			}
+
+			// Check for malformed absolute URLs
+			if parsed.Scheme != "" {
+				// Has a scheme - check if it's valid
+				if parsed.Scheme == "http" || parsed.Scheme == "https" {
+					// http/https must have a host
+					if parsed.Host == "" {
+						lints = append(lints, malformedHref.Emit(href))
+					}
+				} else {
+					// Unknown scheme - likely a typo like htp:// or htps://
+					lints = append(lints, malformedHref.Emit(href))
+				}
+			}
+		})
+
+		return lints
+	}
+	linter.Register(malformedHref)
 }

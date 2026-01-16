@@ -1649,6 +1649,140 @@ func TestLinter_NoOutgoingLinks_ValidAmongInvalid(t *testing.T) {
 	assert.Nil(t, found, "one valid link among invalid should not trigger")
 }
 
+func TestLinter_MalformedHref_SingleSlash(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http:/example.com">Bad link</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "malformed-href")
+	assert.NotNil(t, found, "expected malformed-href lint for single slash")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Contains(t, found.Evidence, "http:/example.com")
+}
+
+func TestLinter_MalformedHref_ExtraColon(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http:://example.com">Bad link</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "malformed-href")
+	assert.NotNil(t, found, "expected malformed-href lint for extra colon")
+}
+
+func TestLinter_MalformedHref_MisspelledHTTP(t *testing.T) {
+	testCases := []string{
+		"htp://example.com",
+		"htpp://example.com",
+		"hhtp://example.com",
+	}
+
+	for _, href := range testCases {
+		html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="` + href + `">Bad link</a>
+</body>
+</html>`)
+
+		pageURL, _ := url.Parse("http://example.com/")
+		lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+		require.NoError(t, err)
+
+		found := findLint(lints, "malformed-href")
+		assert.NotNil(t, found, "expected malformed-href lint for %s", href)
+	}
+}
+
+func TestLinter_MalformedHref_MisspelledHTTPS(t *testing.T) {
+	testCases := []string{
+		"htps://example.com",
+		"httpss://example.com",
+		"htpps://example.com",
+	}
+
+	for _, href := range testCases {
+		html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="` + href + `">Bad link</a>
+</body>
+</html>`)
+
+		pageURL, _ := url.Parse("http://example.com/")
+		lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+		require.NoError(t, err)
+
+		found := findLint(lints, "malformed-href")
+		assert.NotNil(t, found, "expected malformed-href lint for %s", href)
+	}
+}
+
+func TestLinter_MalformedHref_ValidURLs(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com">HTTP</a>
+<a href="https://example.com">HTTPS</a>
+<a href="/relative/path">Relative</a>
+<a href="../parent">Parent</a>
+<a href="page.html">Same dir</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "malformed-href")
+	assert.Nil(t, found, "valid URLs should not trigger")
+}
+
+func TestLinter_MalformedHref_IgnoresSpecialSchemes(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="#anchor">Anchor</a>
+<a href="javascript:void(0)">JS</a>
+<a href="mailto:test@test.com">Email</a>
+<a href="tel:123">Phone</a>
+<a href="/valid">Valid</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "malformed-href")
+	assert.Nil(t, found, "special schemes should not trigger")
+}
+
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
 	for _, l := range lints {
 		if l.Rule == ruleID {
