@@ -1210,6 +1210,127 @@ func TestLinter_LocalhostLink_NoLocalhostLinks(t *testing.T) {
 	assert.Nil(t, found, "should not trigger for normal links")
 }
 
+func TestLinter_LocalFileLink_WindowsPath(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="C:\Computer\Sitebulb\page.html">Page</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "local-file-link")
+	assert.NotNil(t, found, "expected local-file-link lint for Windows path")
+	assert.Equal(t, linter.Critical, found.Severity)
+	assert.Equal(t, linter.Links, found.Category)
+	assert.Contains(t, found.Evidence, "C:\\Computer")
+}
+
+func TestLinter_LocalFileLink_WindowsPathForwardSlash(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="D:/Users/test/file.html">Page</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "local-file-link")
+	assert.NotNil(t, found, "expected local-file-link lint for Windows path with forward slash")
+}
+
+func TestLinter_LocalFileLink_UNCPath(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="\\servername\path\file.html">Page</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "local-file-link")
+	assert.NotNil(t, found, "expected local-file-link lint for UNC path")
+	assert.Contains(t, found.Evidence, "\\\\servername")
+}
+
+func TestLinter_LocalFileLink_FileProtocol(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="file:///C:/Users/test/file.html">Page</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "local-file-link")
+	assert.NotNil(t, found, "expected local-file-link lint for file:// protocol")
+	assert.Contains(t, found.Evidence, "file:///")
+}
+
+func TestLinter_LocalFileLink_FileProtocolCaseInsensitive(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="FILE:///path/to/file">Page</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "local-file-link")
+	assert.NotNil(t, found, "should detect FILE:// case-insensitively")
+}
+
+func TestLinter_LocalFileLink_NoLocalPaths(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com/test">Test</a>
+<a href="/relative/path">Relative</a>
+<a href="../parent/path">Parent</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "local-file-link")
+	assert.Nil(t, found, "should not trigger for normal links")
+}
+
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
 	for _, l := range lints {
 		if l.Rule == ruleID {

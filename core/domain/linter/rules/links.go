@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -36,4 +37,46 @@ func init() {
 		return lints
 	}
 	linter.Register(localhostLink)
+
+	// Matches Windows drive letters like C:\ D:/ etc.
+	driveLetterPattern := regexp.MustCompile(`(?i)^[a-z]:[/\\]`)
+
+	localFileLink := &linter.Rule{
+		ID:       "local-file-link",
+		Name:     "Has link with a URL referencing a local or UNC file path",
+		Severity: linter.Critical,
+		Category: linter.Links,
+		Tag:      linter.Issue,
+	}
+	localFileLink.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+
+		ctx.Doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+			href, exists := s.Attr("href")
+			if !exists {
+				return
+			}
+
+			// Check for UNC paths (\\server\path)
+			if strings.HasPrefix(href, "\\\\") {
+				lints = append(lints, localFileLink.Emit(href))
+				return
+			}
+
+			// Check for file:// protocol
+			if strings.HasPrefix(strings.ToLower(href), "file://") {
+				lints = append(lints, localFileLink.Emit(href))
+				return
+			}
+
+			// Check for Windows drive letter paths (C:\, D:/, etc.)
+			if driveLetterPattern.MatchString(href) {
+				lints = append(lints, localFileLink.Emit(href))
+				return
+			}
+		})
+
+		return lints
+	}
+	linter.Register(localFileLink)
 }
