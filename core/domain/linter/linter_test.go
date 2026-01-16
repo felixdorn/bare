@@ -878,6 +878,101 @@ func TestLinter_CheckOptions_EmptyChain(t *testing.T) {
 	assert.Empty(t, ctx.RedirectChain)
 }
 
+func TestLinter_RedirectsToSelf(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page-a")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/page-a", StatusCode: 301},
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: chain,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirects-to-self")
+	assert.NotNil(t, found, "expected redirects-to-self lint")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.Redirects, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+	assert.Contains(t, found.Evidence, "http://example.com/page-a")
+}
+
+func TestLinter_RedirectsToSelf_InChain(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page-a")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/page-b", StatusCode: 301},
+		{URL: "http://example.com/page-a", StatusCode: 302}, // Self-redirect in middle of chain
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: chain,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirects-to-self")
+	assert.NotNil(t, found, "expected redirects-to-self lint when self-redirect is in chain")
+}
+
+func TestLinter_RedirectsToSelf_NoSelfRedirect(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page-a")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/page-b", StatusCode: 301},
+		{URL: "http://example.com/page-c", StatusCode: 302},
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: chain,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirects-to-self")
+	assert.Nil(t, found, "should not trigger when no self-redirect exists")
+}
+
+func TestLinter_RedirectsToSelf_NoRedirects(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page-a")
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: nil,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirects-to-self")
+	assert.Nil(t, found, "should not trigger when no redirects exist")
+}
+
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
 	for _, l := range lints {
 		if l.Rule == ruleID {
