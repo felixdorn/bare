@@ -82,4 +82,31 @@ func init() {
 		return results
 	}
 	linter.RegisterSiteRule(notFoundInSitemap)
+
+	// Rule: Canonicalized URL in XML Sitemap
+	canonicalizedInSitemap := &linter.SiteRule{
+		ID:       "sitemap-has-canonicalized-url",
+		Name:     "URL in XML sitemap has non-self-referencing canonical",
+		Severity: linter.High,
+		Category: linter.XMLSitemaps,
+		Tag:      linter.Issue,
+	}
+	canonicalizedInSitemap.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+		var results []linter.SiteLintResult
+
+		for _, page := range pages {
+			// Check if in sitemap and has a canonical that points elsewhere
+			if page.InSitemap && page.Canonical != "" && page.Canonical != page.URL {
+				results = append(results, linter.SiteLintResult{
+					URL: page.URL,
+					Lints: []linter.Lint{
+						canonicalizedInSitemap.Emit(page.Canonical),
+					},
+				})
+			}
+		}
+
+		return results
+	}
+	linter.RegisterSiteRule(canonicalizedInSitemap)
 }

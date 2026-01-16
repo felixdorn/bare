@@ -6,6 +6,7 @@ type SiteLintInput struct {
 	StatusCode    int
 	InSitemap     bool
 	IsNoindex     bool
+	Canonical     string
 	InternalLinks []SiteLink
 }
 

@@ -239,6 +239,7 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 			StatusCode:    p.StatusCode,
 			InSitemap:     sitemapURLs[p.URL],
 			IsNoindex:     p.IsNoindex,
+			Canonical:     p.Canonical,
 			InternalLinks: links,
 		}
 	}

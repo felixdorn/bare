@@ -343,3 +343,69 @@ func TestSiteLint_SitemapHas4xxURL_Various4xxCodes(t *testing.T) {
 		assert.NotNil(t, lint, "expected lint for status code %d", code)
 	}
 }
+
+// Tests for sitemap-has-canonicalized-url rule
+
+func TestSiteLint_SitemapHasCanonicalizedURL(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/",
+			StatusCode: 200,
+			InSitemap:  true,
+			Canonical:  "http://example.com/", // self-referencing
+		},
+		{
+			URL:        "http://example.com/page-a",
+			StatusCode: 200,
+			InSitemap:  true,
+			Canonical:  "http://example.com/page-b", // points elsewhere
+		},
+		{
+			URL:        "http://example.com/not-in-sitemap",
+			StatusCode: 200,
+			InSitemap:  false,
+			Canonical:  "http://example.com/other", // not in sitemap
+		},
+		{
+			URL:        "http://example.com/no-canonical",
+			StatusCode: 200,
+			InSitemap:  true,
+			Canonical:  "", // no canonical
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// /page-a has non-self canonical AND in sitemap - should trigger
+	lint := findSiteLint(results["http://example.com/page-a"], "sitemap-has-canonicalized-url")
+	assert.NotNil(t, lint, "expected sitemap-has-canonicalized-url lint")
+	assert.Equal(t, linter.High, lint.Severity)
+	assert.Equal(t, linter.XMLSitemaps, lint.Category)
+	assert.Contains(t, lint.Evidence, "http://example.com/page-b")
+
+	// / has self-referencing canonical - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "sitemap-has-canonicalized-url"))
+
+	// /not-in-sitemap has canonical but NOT in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/not-in-sitemap"], "sitemap-has-canonicalized-url"))
+
+	// /no-canonical has no canonical - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/no-canonical"], "sitemap-has-canonicalized-url"))
+}
+
+func TestSiteLint_SitemapHasCanonicalizedURL_ExternalCanonical(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/page",
+			StatusCode: 200,
+			InSitemap:  true,
+			Canonical:  "http://other-site.com/page", // external canonical
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	lint := findSiteLint(results["http://example.com/page"], "sitemap-has-canonicalized-url")
+	assert.NotNil(t, lint, "expected lint for external canonical")
+	assert.Contains(t, lint.Evidence, "http://other-site.com/page")
+}
