@@ -2,7 +2,18 @@
 
 This guide explains how to add new SEO linting rules to dalin.
 
+## Rule Types
+
+There are two types of rules:
+
+| Type | When It Runs | Context Available | Use Case |
+|------|--------------|-------------------|----------|
+| **Page Rule** | During crawl | Single page HTML, URL, status code | On-page SEO, content checks |
+| **Site Rule** | After crawl | All pages, full link graph | Cross-page analysis, link structure |
+
 ## Quick Start
+
+### Page Rule
 
 Create a rule in the appropriate category file (or create a new one):
 
@@ -31,7 +42,51 @@ func init() {
 }
 ```
 
-## Rule Structure
+### Site Rule
+
+Site rules run after the entire crawl completes and have access to all pages and their link relationships:
+
+```go
+package rules
+
+import (
+    "fmt"
+    "github.com/felixdorn/bare/core/domain/linter"
+)
+
+func init() {
+    rule := &linter.SiteRule{
+        ID:       "orphan-page",
+        Name:     "Page has no incoming internal links",
+        Severity: linter.High,
+        Category: linter.Links,
+        Tag:      linter.Issue,
+    }
+    rule.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+        // Build incoming links map
+        incoming := make(map[string]int)
+        for _, page := range pages {
+            for _, link := range page.InternalLinks {
+                incoming[link.TargetURL]++
+            }
+        }
+
+        var results []linter.SiteLintResult
+        for _, page := range pages {
+            if incoming[page.URL] == 0 {
+                results = append(results, linter.SiteLintResult{
+                    URL:   page.URL,
+                    Lints: []linter.Lint{rule.Emit("No pages link to this URL")},
+                })
+            }
+        }
+        return results
+    }
+    linter.RegisterSiteRule(rule)
+}
+```
+
+## Page Rule Structure
 
 ### Required Fields
 
@@ -43,6 +98,48 @@ func init() {
 | `Category` | `Category` | See categories below |
 | `Tag` | `Tag` | `Issue`, `Opportunity`, or `PotentialIssue` |
 | `Check` | `func(*Context) []Lint` | The check function |
+
+## Site Rule Structure
+
+### Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Unique identifier, kebab-case |
+| `Name` | `string` | Human-readable message shown in reports |
+| `Severity` | `Severity` | `Critical`, `High`, `Medium`, or `Low` |
+| `Category` | `Category` | See categories below |
+| `Tag` | `Tag` | `Issue`, `Opportunity`, or `PotentialIssue` |
+| `Check` | `func([]SiteLintInput) []SiteLintResult` | The check function |
+
+### Site Rule Input
+
+Your `Check` function receives all crawled pages:
+
+```go
+type SiteLintInput struct {
+    URL           string      // Page URL
+    InternalLinks []SiteLink  // Links to other pages on the site
+}
+
+type SiteLink struct {
+    TargetURL string  // URL being linked to
+    IsFollow  bool    // true if not rel="nofollow"
+}
+```
+
+### Site Rule Output
+
+Return lints grouped by page URL:
+
+```go
+type SiteLintResult struct {
+    URL   string  // Page URL to attach lints to
+    Lints []Lint  // Lints for this page
+}
+```
+
+## Common Fields
 
 ### Severity Levels
 
@@ -81,9 +178,9 @@ Rendered         // JS rendering issues
 | `Opportunity` | Something is missing that could help |
 | `PotentialIssue` | Might be a problem depending on context |
 
-## The Context Object
+## The Context Object (Page Rules)
 
-Your `Check` function receives a `*Context` with:
+Page rule `Check` functions receive a `*Context` with:
 
 ```go
 type Context struct {
@@ -160,21 +257,20 @@ rule.Emit(fmt.Sprintf("Title is %d chars", n))  // Formatted details
 
 ## File Organization
 
-Rules are organized by category:
+Rules are organized by **category**, not by type. Page rules and site rules for the same category belong in the same file:
 
 ```
 core/domain/linter/rules/
 ├── README.md        # This file
 ├── on_page.go       # Title, H1, meta tags
-├── accessibility.go # Alt text, ARIA
-├── security.go      # HTTPS, mixed content
-├── performance.go   # Image size, resources
-└── links.go         # Broken links, redirects
+├── links.go         # Link validation (page + site rules)
+├── internal.go      # Internal URL checks
+└── redirects.go     # Redirect issues
 ```
 
-Create a new file for a new category, or add to an existing one.
+Create a new file for a new category, or add to an existing one. Both `linter.Register()` (page rules) and `linter.RegisterSiteRule()` (site rules) can be called from the same file.
 
-## Complete Example
+## Complete Page Rule Example
 
 ```go
 // rules/accessibility.go
@@ -231,9 +327,68 @@ func init() {
 }
 ```
 
-## Testing Your Rule
+## Complete Site Rule Example
 
-Add tests in `linter_test.go`:
+```go
+// rules/links.go (site rules go in the same file as related page rules)
+package rules
+
+import (
+    "fmt"
+    "github.com/felixdorn/bare/core/domain/linter"
+)
+
+func init() {
+    // Rule: Pages should have more than one internal page linking to them
+    singleIncomingLink := &linter.SiteRule{
+        ID:       "single-incoming-link",
+        Name:     "Only one internal page links to this URL",
+        Severity: linter.Medium,
+        Category: linter.Links,
+        Tag:      linter.Opportunity,
+    }
+    singleIncomingLink.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+        // Build incoming links map: URL -> list of source URLs
+        incoming := make(map[string]map[string]bool)
+        for _, page := range pages {
+            for _, link := range page.InternalLinks {
+                if !link.IsFollow {
+                    continue // Skip nofollow links
+                }
+                if incoming[link.TargetURL] == nil {
+                    incoming[link.TargetURL] = make(map[string]bool)
+                }
+                incoming[link.TargetURL][page.URL] = true
+            }
+        }
+
+        var results []linter.SiteLintResult
+        for _, page := range pages {
+            sources := incoming[page.URL]
+            if len(sources) == 1 {
+                var sourceURL string
+                for url := range sources {
+                    sourceURL = url
+                }
+                results = append(results, linter.SiteLintResult{
+                    URL:   page.URL,
+                    Lints: []linter.Lint{singleIncomingLink.Emit(
+                        fmt.Sprintf("Only linked from: %s", sourceURL),
+                    )},
+                })
+            }
+        }
+        return results
+    }
+    linter.RegisterSiteRule(singleIncomingLink)
+}
+```
+
+## Testing Your Rules
+
+### Testing Page Rules
+
+Add tests in the appropriate test file (e.g., `on_page_test.go`, `links_test.go`):
 
 ```go
 func TestLinter_MissingAlt(t *testing.T) {
@@ -241,13 +396,41 @@ func TestLinter_MissingAlt(t *testing.T) {
         <body><h1>Hi</h1><img src="test.png"></body></html>`)
 
     pageURL, _ := url.Parse("http://example.com/")
-    lints, err := linter.Check(html, pageURL, nil)
+    lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
     require.NoError(t, err)
 
     found := findLint(lints, "missing-alt")
     assert.NotNil(t, found)
     assert.Equal(t, linter.High, found.Severity)
     assert.Contains(t, found.Evidence, "test.png")
+}
+```
+
+### Testing Site Rules
+
+Add tests in the appropriate category test file (e.g., `links_test.go`) or `site_test.go`:
+
+```go
+func TestSiteLint_SingleIncomingLink(t *testing.T) {
+    pages := []linter.SiteLintInput{
+        {
+            URL: "http://example.com/",
+            InternalLinks: []linter.SiteLink{
+                {TargetURL: "http://example.com/orphan", IsFollow: true},
+            },
+        },
+        {
+            URL:           "http://example.com/orphan",
+            InternalLinks: []linter.SiteLink{},
+        },
+    }
+
+    results := linter.RunSiteRules(pages)
+
+    // /orphan is only linked from / - should trigger
+    lint := findLint(results["http://example.com/orphan"], "single-incoming-link")
+    assert.NotNil(t, lint)
+    assert.Contains(t, lint.Evidence, "http://example.com/")
 }
 ```
 

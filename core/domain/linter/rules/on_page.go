@@ -111,6 +111,7 @@ func init() {
 		ID:       "missing-h1",
 		Name:     "H1 tag is missing",
 		Severity: linter.Medium,
+
 		Category: linter.OnPage,
 		Tag:      linter.Opportunity,
 	}

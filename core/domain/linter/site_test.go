@@ -66,7 +66,7 @@ func TestSiteLint_SingleIncomingLink_OnlyOne(t *testing.T) {
 	// /orphan is only linked from / - should trigger
 	lint := findSiteLint(results["http://example.com/orphan"], "single-incoming-link")
 	assert.NotNil(t, lint, "expected single-incoming-link lint for orphan page")
-	assert.Equal(t, linter.High, lint.Severity)
+	assert.Equal(t, linter.Medium, lint.Severity)
 	assert.Equal(t, linter.Opportunity, lint.Tag)
 	assert.Contains(t, lint.Evidence, "http://example.com/")
 }
