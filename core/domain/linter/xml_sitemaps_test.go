@@ -409,3 +409,42 @@ func TestSiteLint_SitemapHasCanonicalizedURL_ExternalCanonical(t *testing.T) {
 	assert.NotNil(t, lint, "expected lint for external canonical")
 	assert.Contains(t, lint.Evidence, "http://other-site.com/page")
 }
+
+// Tests for sitemap-has-disallowed-url rule
+
+func TestSiteLint_SitemapHasDisallowedURL(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:          "http://example.com/",
+			StatusCode:   200,
+			InSitemap:    true,
+			IsDisallowed: false,
+		},
+		{
+			URL:          "http://example.com/admin",
+			StatusCode:   200,
+			InSitemap:    true,
+			IsDisallowed: true,
+		},
+		{
+			URL:          "http://example.com/private",
+			StatusCode:   200,
+			InSitemap:    false,
+			IsDisallowed: true,
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// /admin is disallowed AND in sitemap - should trigger
+	lint := findSiteLint(results["http://example.com/admin"], "sitemap-has-disallowed-url")
+	assert.NotNil(t, lint, "expected sitemap-has-disallowed-url lint")
+	assert.Equal(t, linter.High, lint.Severity)
+	assert.Equal(t, linter.XMLSitemaps, lint.Category)
+
+	// / is allowed in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "sitemap-has-disallowed-url"))
+
+	// /private is disallowed but NOT in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/private"], "sitemap-has-disallowed-url"))
+}

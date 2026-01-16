@@ -20,6 +20,7 @@ import (
 	"github.com/felixdorn/bare/core/domain/url"
 	"github.com/felixdorn/bare/core/handler/cli/cli"
 	"github.com/spf13/cobra"
+	"github.com/temoto/robotstxt"
 )
 
 // Common errors for link filtering
@@ -112,6 +113,14 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		fetcher = jsFetcher
 	} else {
 		fetcher = crawler.NewHTTPFetcher(nil)
+	}
+
+	// Fetch and parse robots.txt
+	var robots *robotstxt.RobotsData
+	robotsURL, _ := url.Parse(siteURL.String() + "/robots.txt")
+	robotsResult, err := fetcher.Fetch(ctx, robotsURL)
+	if err == nil && robotsResult.StatusCode == 200 {
+		robots, _ = robotstxt.FromBytes(robotsResult.Body)
 	}
 
 	fmt.Printf("Crawling %s...\n", siteURL.String())
@@ -234,11 +243,21 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 				IsFollow:  l.IsFollow,
 			}
 		}
+		// Check if URL is disallowed by robots.txt
+		isDisallowed := false
+		if robots != nil {
+			parsedURL, err := url.Parse(p.URL)
+			if err == nil {
+				isDisallowed = !robots.TestAgent(parsedURL.Path, "*")
+			}
+		}
+
 		siteLintInput[i] = linter.SiteLintInput{
 			URL:           p.URL,
 			StatusCode:    p.StatusCode,
 			InSitemap:     sitemapURLs[p.URL],
 			IsNoindex:     p.IsNoindex,
+			IsDisallowed:  isDisallowed,
 			Canonical:     p.Canonical,
 			InternalLinks: links,
 		}

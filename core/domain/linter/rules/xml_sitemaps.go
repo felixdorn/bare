@@ -109,4 +109,28 @@ func init() {
 		return results
 	}
 	linter.RegisterSiteRule(canonicalizedInSitemap)
+
+	// Rule: Disallowed URL in XML Sitemap
+	disallowedInSitemap := &linter.SiteRule{
+		ID:       "sitemap-has-disallowed-url",
+		Name:     "URL in XML sitemap is disallowed by robots.txt",
+		Severity: linter.High,
+		Category: linter.XMLSitemaps,
+		Tag:      linter.Issue,
+	}
+	disallowedInSitemap.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+		var results []linter.SiteLintResult
+
+		for _, page := range pages {
+			if page.InSitemap && page.IsDisallowed {
+				results = append(results, linter.SiteLintResult{
+					URL:   page.URL,
+					Lints: []linter.Lint{disallowedInSitemap.Emit("")},
+				})
+			}
+		}
+
+		return results
+	}
+	linter.RegisterSiteRule(disallowedInSitemap)
 }
