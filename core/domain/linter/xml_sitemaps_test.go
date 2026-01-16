@@ -503,3 +503,40 @@ func TestSiteLint_SitemapHasDisallowedURL(t *testing.T) {
 	// /private is disallowed but NOT in sitemap - should not trigger
 	assert.Nil(t, findSiteLint(results["http://example.com/private"], "sitemap-has-disallowed-url"))
 }
+
+// Tests for sitemap-has-timeout-url rule
+
+func TestSiteLint_SitemapHasTimeoutURL(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/",
+			StatusCode: 200,
+			InSitemap:  true,
+			IsTimeout:  false,
+		},
+		{
+			URL:       "http://example.com/slow-page",
+			InSitemap: true,
+			IsTimeout: true,
+		},
+		{
+			URL:       "http://example.com/timeout-not-in-sitemap",
+			InSitemap: false,
+			IsTimeout: true,
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// /slow-page timed out AND in sitemap - should trigger
+	lint := findSiteLint(results["http://example.com/slow-page"], "sitemap-has-timeout-url")
+	assert.NotNil(t, lint, "expected sitemap-has-timeout-url lint")
+	assert.Equal(t, linter.Medium, lint.Severity)
+	assert.Equal(t, linter.XMLSitemaps, lint.Category)
+
+	// / is OK in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "sitemap-has-timeout-url"))
+
+	// /timeout-not-in-sitemap timed out but NOT in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/timeout-not-in-sitemap"], "sitemap-has-timeout-url"))
+}

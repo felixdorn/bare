@@ -159,4 +159,28 @@ func init() {
 		return results
 	}
 	linter.RegisterSiteRule(disallowedInSitemap)
+
+	// Rule: Timeout URL in XML Sitemap
+	timeoutInSitemap := &linter.SiteRule{
+		ID:       "sitemap-has-timeout-url",
+		Name:     "URL in XML sitemap timed out",
+		Severity: linter.Medium,
+		Category: linter.XMLSitemaps,
+		Tag:      linter.Issue,
+	}
+	timeoutInSitemap.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+		var results []linter.SiteLintResult
+
+		for _, page := range pages {
+			if page.InSitemap && page.IsTimeout {
+				results = append(results, linter.SiteLintResult{
+					URL:   page.URL,
+					Lints: []linter.Lint{timeoutInSitemap.Emit("")},
+				})
+			}
+		}
+
+		return results
+	}
+	linter.RegisterSiteRule(timeoutInSitemap)
 }

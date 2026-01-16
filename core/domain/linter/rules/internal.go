@@ -22,4 +22,32 @@ func init() {
 		return nil
 	}
 	linter.Register(brokenURL)
+
+	// Site rule: Internal URL failed to crawl (timeout or other error)
+	brokenCrawlError := &linter.SiteRule{
+		ID:       "broken-internal-url-crawl-error",
+		Name:     "Internal URL failed to crawl",
+		Severity: linter.High,
+		Category: linter.Internal,
+		Tag:      linter.Issue,
+	}
+	brokenCrawlError.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+		var results []linter.SiteLintResult
+
+		for _, page := range pages {
+			if page.CrawlError != "" {
+				evidence := "Crawl error"
+				if page.IsTimeout {
+					evidence = "Request timed out"
+				}
+				results = append(results, linter.SiteLintResult{
+					URL:   page.URL,
+					Lints: []linter.Lint{brokenCrawlError.Emit(evidence)},
+				})
+			}
+		}
+
+		return results
+	}
+	linter.RegisterSiteRule(brokenCrawlError)
 }

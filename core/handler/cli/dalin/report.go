@@ -85,6 +85,10 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 	sitemapURLs := make(map[string]bool)
 	var sitemapMu sync.Mutex
 
+	// Collected crawl errors (URL -> error message)
+	crawlErrors := make(map[string]string)
+	var crawlErrorMu sync.Mutex
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -218,6 +222,12 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 				Int("lints", len(lints)).
 				Msg("Analyzed page")
 		},
+
+		OnError: func(pageURL *url.URL, err error) {
+			crawlErrorMu.Lock()
+			crawlErrors[pageURL.String()] = err.Error()
+			crawlErrorMu.Unlock()
+		},
 	})
 
 	if err := cr.Run(ctx); err != nil {
@@ -252,14 +262,37 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 			}
 		}
 
+		crawlErr := crawlErrors[p.URL]
 		siteLintInput[i] = linter.SiteLintInput{
 			URL:           p.URL,
 			StatusCode:    p.StatusCode,
 			InSitemap:     sitemapURLs[p.URL],
 			IsNoindex:     p.IsNoindex,
 			IsDisallowed:  isDisallowed,
+			IsTimeout:     isTimeoutError(errors.New(crawlErr)),
+			CrawlError:    crawlErr,
 			Canonical:     p.Canonical,
 			InternalLinks: links,
+		}
+	}
+
+	// Add URLs that failed to crawl (these aren't in pages)
+	for errorURL, errMsg := range crawlErrors {
+		// Check if this URL is already in siteLintInput (it shouldn't be, but be safe)
+		found := false
+		for _, input := range siteLintInput {
+			if input.URL == errorURL {
+				found = true
+				break
+			}
+		}
+		if !found {
+			siteLintInput = append(siteLintInput, linter.SiteLintInput{
+				URL:        errorURL,
+				InSitemap:  sitemapURLs[errorURL],
+				IsTimeout:  isTimeoutError(errors.New(errMsg)),
+				CrawlError: errMsg,
+			})
 		}
 	}
 
@@ -332,4 +365,15 @@ func NewReportCommand(c *cli.CLI) *cobra.Command {
 func isCrawlable(u *url.URL) bool {
 	ext := filepath.Ext(u.Path)
 	return ext == "" || ext == ".html"
+}
+
+// isTimeoutError checks if an error is a timeout error.
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "deadline exceeded") ||
+		strings.Contains(errStr, "Timeout")
 }

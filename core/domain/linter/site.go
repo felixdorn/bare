@@ -7,6 +7,8 @@ type SiteLintInput struct {
 	InSitemap     bool
 	IsNoindex     bool
 	IsDisallowed  bool
+	IsTimeout     bool
+	CrawlError    string // Non-empty if the URL failed to crawl
 	Canonical     string
 	InternalLinks []SiteLink
 }

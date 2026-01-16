@@ -109,3 +109,59 @@ func TestLinter_BrokenInternalURL_301Redirect(t *testing.T) {
 	found := findLint(lints, "broken-internal-url")
 	assert.Nil(t, found, "should not trigger for 3XX redirects")
 }
+
+// Site rule tests for crawl errors
+
+func TestSiteLint_BrokenInternalURL_CrawlError(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/",
+			StatusCode: 200,
+		},
+		{
+			URL:        "http://example.com/error-page",
+			CrawlError: "connection refused",
+		},
+		{
+			URL:        "http://example.com/timeout-page",
+			CrawlError: "request timeout exceeded",
+			IsTimeout:  true,
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// / is OK - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "broken-internal-url-crawl-error"))
+
+	// /error-page had a crawl error - should trigger
+	lint := findSiteLint(results["http://example.com/error-page"], "broken-internal-url-crawl-error")
+	assert.NotNil(t, lint, "expected broken-internal-url-crawl-error lint for crawl error")
+	assert.Equal(t, linter.High, lint.Severity)
+	assert.Equal(t, linter.Internal, lint.Category)
+	assert.Contains(t, lint.Evidence, "Crawl error")
+
+	// /timeout-page timed out - should trigger with timeout evidence
+	lint = findSiteLint(results["http://example.com/timeout-page"], "broken-internal-url-crawl-error")
+	assert.NotNil(t, lint, "expected broken-internal-url-crawl-error lint for timeout")
+	assert.Contains(t, lint.Evidence, "timed out")
+}
+
+func TestSiteLint_BrokenInternalURL_NoCrawlError(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/",
+			StatusCode: 200,
+		},
+		{
+			URL:        "http://example.com/page",
+			StatusCode: 404, // Has status code, so was crawled successfully
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// Neither should trigger the crawl error rule (they were crawled successfully)
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "broken-internal-url-crawl-error"))
+	assert.Nil(t, findSiteLint(results["http://example.com/page"], "broken-internal-url-crawl-error"))
+}

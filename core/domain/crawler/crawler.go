@@ -46,6 +46,10 @@ type Config struct {
 
 	// OnPage is called when a page has been fully crawled.
 	OnPage func(page *Page)
+
+	// OnError is called when fetching a page fails.
+	// The error may be a timeout, connection error, or other fetch failure.
+	OnError func(url *url.URL, err error)
 }
 
 // Crawler manages the crawling process.
@@ -164,6 +168,9 @@ controllerLoop:
 			if result.err != nil {
 				if ctx.Err() == nil {
 					c.log.Error().Err(result.err).Str("url", result.pageURL.String()).Msg("Failed to process URL")
+					if c.cfg.OnError != nil {
+						c.cfg.OnError(result.pageURL, result.err)
+					}
 				}
 				continue
 			}
