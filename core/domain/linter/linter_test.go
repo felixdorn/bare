@@ -1331,6 +1331,150 @@ func TestLinter_LocalFileLink_NoLocalPaths(t *testing.T) {
 	assert.Nil(t, found, "should not trigger for normal links")
 }
 
+func TestLinter_WhitespaceHref_LeadingSpace(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href=" https://www.example.com">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-href")
+	assert.NotNil(t, found, "expected whitespace-href lint for leading space")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.Links, found.Category)
+}
+
+func TestLinter_WhitespaceHref_TrailingSpace(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="https://www.example.com ">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-href")
+	assert.NotNil(t, found, "expected whitespace-href lint for trailing space")
+}
+
+func TestLinter_WhitespaceHref_BothEnds(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="  https://www.example.com  ">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-href")
+	assert.NotNil(t, found, "expected whitespace-href lint for whitespace on both ends")
+}
+
+func TestLinter_WhitespaceHref_Tabs(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="	https://www.example.com">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-href")
+	assert.NotNil(t, found, "expected whitespace-href lint for tab character")
+}
+
+func TestLinter_WhitespaceHref_Newline(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="
+https://www.example.com">Test</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-href")
+	assert.NotNil(t, found, "expected whitespace-href lint for newline character")
+}
+
+func TestLinter_WhitespaceHref_NoWhitespace(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="https://www.example.com">Test</a>
+<a href="/relative/path">Relative</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-href")
+	assert.Nil(t, found, "should not trigger for clean hrefs")
+}
+
+func TestLinter_WhitespaceHref_MultipleLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href=" /one">One</a>
+<a href="/two ">Two</a>
+<a href="/clean">Clean</a>
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "whitespace-href" {
+			count++
+		}
+	}
+	assert.Equal(t, 2, count, "should detect both links with whitespace")
+}
+
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
 	for _, l := range lints {
 		if l.Rule == ruleID {

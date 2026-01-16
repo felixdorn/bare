@@ -79,4 +79,31 @@ func init() {
 		return lints
 	}
 	linter.Register(localFileLink)
+
+	whitespaceHref := &linter.Rule{
+		ID:       "whitespace-href",
+		Name:     "Has a link with whitespace in href attribute",
+		Severity: linter.High,
+		Category: linter.Links,
+		Tag:      linter.Issue,
+	}
+	whitespaceHref.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+
+		ctx.Doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+			href, exists := s.Attr("href")
+			if !exists || href == "" {
+				return
+			}
+
+			// Check for leading or trailing whitespace
+			trimmed := strings.TrimSpace(href)
+			if trimmed != href {
+				lints = append(lints, whitespaceHref.Emit(href))
+			}
+		})
+
+		return lints
+	}
+	linter.Register(whitespaceHref)
 }
