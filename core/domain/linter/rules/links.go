@@ -106,4 +106,63 @@ func init() {
 		return lints
 	}
 	linter.Register(whitespaceHref)
+
+	noOutgoingLinks := &linter.Rule{
+		ID:       "no-outgoing-links",
+		Name:     "Has no outgoing links",
+		Severity: linter.High,
+		Category: linter.Links,
+		Tag:      linter.PotentialIssue,
+	}
+	noOutgoingLinks.Check = func(ctx *linter.Context) []linter.Lint {
+		hasValidLink := false
+
+		ctx.Doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+			if hasValidLink {
+				return // Already found one
+			}
+
+			href, exists := s.Attr("href")
+			if !exists || href == "" {
+				return
+			}
+
+			href = strings.TrimSpace(href)
+			hrefLower := strings.ToLower(href)
+
+			// Skip fragment-only links (#something)
+			if strings.HasPrefix(href, "#") {
+				return
+			}
+
+			// Skip javascript: links
+			if strings.HasPrefix(hrefLower, "javascript:") {
+				return
+			}
+
+			// Skip mailto: links
+			if strings.HasPrefix(hrefLower, "mailto:") {
+				return
+			}
+
+			// Skip tel: links
+			if strings.HasPrefix(hrefLower, "tel:") {
+				return
+			}
+
+			// Skip data: links
+			if strings.HasPrefix(hrefLower, "data:") {
+				return
+			}
+
+			// This is a valid outgoing link
+			hasValidLink = true
+		})
+
+		if !hasValidLink {
+			return []linter.Lint{noOutgoingLinks.Emit("")}
+		}
+		return nil
+	}
+	linter.Register(noOutgoingLinks)
 }

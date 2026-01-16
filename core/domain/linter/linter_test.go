@@ -117,7 +117,7 @@ func TestLinter_ValidPage(t *testing.T) {
 	html := []byte(`<!DOCTYPE html>
 <html>
 <head><title>This is a valid page title with enough characters</title></head>
-<body><h1>Welcome to our example page</h1><p>Content</p></body>
+<body><h1>Welcome to our example page</h1><p>Content</p><a href="/about">About</a></body>
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
@@ -1473,6 +1473,180 @@ func TestLinter_WhitespaceHref_MultipleLinks(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 2, count, "should detect both links with whitespace")
+}
+
+func TestLinter_NoOutgoingLinks_NoLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<p>This page has no links at all.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.NotNil(t, found, "expected no-outgoing-links lint")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.PotentialIssue, found.Tag)
+}
+
+func TestLinter_NoOutgoingLinks_OnlyFragmentLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="#section1">Section 1</a>
+<a href="#section2">Section 2</a>
+<p id="section1">Content 1</p>
+<p id="section2">Content 2</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.NotNil(t, found, "fragment-only links should trigger")
+}
+
+func TestLinter_NoOutgoingLinks_OnlyJavascriptLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="javascript:void(0);">Click me</a>
+<a href="javascript:doSomething()">Do something</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.NotNil(t, found, "javascript: links should trigger")
+}
+
+func TestLinter_NoOutgoingLinks_OnlyMailtoLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="mailto:test@example.com">Email us</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.NotNil(t, found, "mailto: links should trigger")
+}
+
+func TestLinter_NoOutgoingLinks_OnlyTelLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="tel:+1234567890">Call us</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.NotNil(t, found, "tel: links should trigger")
+}
+
+func TestLinter_NoOutgoingLinks_MixedInvalidLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="#test">Anchor</a>
+<a href="javascript:void(0);">JS</a>
+<a href="mailto:test@test.com">Email</a>
+<a href="tel:123">Phone</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.NotNil(t, found, "mix of invalid links should trigger")
+}
+
+func TestLinter_NoOutgoingLinks_HasValidLink(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="/about">About us</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.Nil(t, found, "relative link should not trigger")
+}
+
+func TestLinter_NoOutgoingLinks_HasExternalLink(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="https://external.com/page">External</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.Nil(t, found, "external link should not trigger")
+}
+
+func TestLinter_NoOutgoingLinks_ValidAmongInvalid(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="#test">Anchor</a>
+<a href="javascript:void(0);">JS</a>
+<a href="/valid-page">Valid</a>
+<a href="mailto:test@test.com">Email</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "no-outgoing-links")
+	assert.Nil(t, found, "one valid link among invalid should not trigger")
 }
 
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
