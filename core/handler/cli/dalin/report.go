@@ -80,6 +80,10 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 	var pages []reporter.PageReport
 	var pagesMu sync.Mutex
 
+	// Collected sitemap URLs
+	sitemapURLs := make(map[string]bool)
+	var sitemapMu sync.Mutex
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -139,6 +143,18 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		},
 
 		OnPage: func(page *crawler.Page) {
+			// Check if this is a sitemap and extract URLs
+			if linter.IsSitemapURL(page.URL.String()) || linter.IsSitemapContent(page.Body) {
+				urls := linter.ParseSitemapURLs(page.Body)
+				if len(urls) > 0 {
+					sitemapMu.Lock()
+					for _, u := range urls {
+						sitemapURLs[u] = true
+					}
+					sitemapMu.Unlock()
+				}
+			}
+
 			// Only report on HTML pages, not assets
 			if !isCrawlable(page.URL) {
 				return
@@ -221,6 +237,8 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		}
 		siteLintInput[i] = linter.SiteLintInput{
 			URL:           p.URL,
+			StatusCode:    p.StatusCode,
+			InSitemap:     sitemapURLs[p.URL],
 			InternalLinks: links,
 		}
 	}

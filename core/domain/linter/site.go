@@ -3,6 +3,8 @@ package linter
 // SiteLintInput represents data needed for site-level lint analysis.
 type SiteLintInput struct {
 	URL           string
+	StatusCode    int
+	InSitemap     bool
 	InternalLinks []SiteLink
 }
 
