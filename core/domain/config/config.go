@@ -18,6 +18,7 @@ type Pages struct {
 type JS struct {
 	Enabled        bool          `toml:"enabled"`
 	Wait           time.Duration `toml:"wait_for"`
+	MaxTabs        int           `toml:"max_tabs"`
 	ExecutablePath string        `toml:"executable_path,omitempty"`
 	Flags          []string      `toml:"flags,omitempty"`
 }
@@ -59,6 +60,7 @@ func NewDefaultConfig() *Config {
 		JS: JS{
 			Enabled:        false,
 			Wait:           2000,
+			MaxTabs:        1,
 			ExecutablePath: "",
 			Flags:          []string{},
 		},

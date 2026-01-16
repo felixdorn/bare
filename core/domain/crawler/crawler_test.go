@@ -45,7 +45,7 @@ func TestCrawler_DeduplicatesFragments(t *testing.T) {
 		WorkerCount: 1, // Single worker for deterministic order
 		Entrypoints: []string{"/"},
 		Logger:      zerolog.Nop(),
-		HTTPClient:  server.Client(),
+		Fetcher:     NewHTTPFetcher(server.Client()),
 		OnNewLink: func(page *Page, link Link) error {
 			// Follow all internal links
 			if link.URL.IsInternal(page.URL) {
@@ -109,7 +109,7 @@ func TestCrawler_DeduplicatesHTTPAndHTTPS(t *testing.T) {
 		WorkerCount: 1,
 		Entrypoints: []string{"/"},
 		Logger:      zerolog.Nop(),
-		HTTPClient:  server.Client(),
+		Fetcher:     NewHTTPFetcher(server.Client()),
 		OnNewLink: func(page *Page, link Link) error {
 			// Follow all links that match our host (ignore scheme difference)
 			if link.URL.Host == page.URL.Host {
@@ -138,4 +138,71 @@ func TestCrawler_DeduplicatesHTTPAndHTTPS(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, aboutCount, "/about should only be visited once despite http/https variants")
+}
+
+func TestCrawler_DeduplicatesTrailingSlashes(t *testing.T) {
+	// Set up a mock server with links that have and don't have trailing slashes
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Normalize path for switch (server sees both with and without slash)
+		path := r.URL.Path
+		if len(path) > 1 && path[len(path)-1] == '/' {
+			path = path[:len(path)-1]
+		}
+
+		switch path {
+		case "/":
+			fmt.Fprintln(w, `<html><body>
+				<a href="/about">About</a>
+				<a href="/about/">About with slash</a>
+				<a href="/contact/">Contact with slash</a>
+				<a href="/contact">Contact</a>
+			</body></html>`)
+		case "/about":
+			fmt.Fprintln(w, `<html><body><h1>About</h1></body></html>`)
+		case "/contact":
+			fmt.Fprintln(w, `<html><body><h1>Contact</h1></body></html>`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	serverURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
+
+	var visitedPaths []string
+	var mu sync.Mutex
+
+	c := New(Config{
+		BaseURL:     serverURL,
+		WorkerCount: 1,
+		Entrypoints: []string{"/"},
+		Logger:      zerolog.Nop(),
+		Fetcher:     NewHTTPFetcher(server.Client()),
+		OnNewLink: func(page *Page, link Link) error {
+			if link.URL.IsInternal(page.URL) {
+				return nil
+			}
+			return fmt.Errorf("external")
+		},
+		OnPage: func(page *Page) {
+			mu.Lock()
+			visitedPaths = append(visitedPaths, page.URL.Path)
+			mu.Unlock()
+		},
+	})
+
+	err = c.Run(context.Background())
+	require.NoError(t, err)
+
+	// Should visit "/", "/about", "/contact" once each (3 total)
+	assert.Len(t, visitedPaths, 3, "Should only visit 3 unique pages, not duplicates with trailing slashes")
+
+	// Count occurrences
+	counts := make(map[string]int)
+	for _, p := range visitedPaths {
+		counts[p]++
+	}
+	assert.Equal(t, 1, counts["/about"], "/about should only be visited once")
+	assert.Equal(t, 1, counts["/contact"], "/contact should only be visited once")
 }

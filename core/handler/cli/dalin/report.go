@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/felixdorn/bare/core/domain/analyzer"
 	"github.com/felixdorn/bare/core/domain/crawler"
+	"github.com/felixdorn/bare/core/domain/linter"
+	_ "github.com/felixdorn/bare/core/domain/linter/rules" // Register linting rules
 	"github.com/felixdorn/bare/core/domain/reporter"
 	"github.com/felixdorn/bare/core/domain/url"
 	"github.com/felixdorn/bare/core/handler/cli/cli"
@@ -57,6 +60,13 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 	entrypoints, _ := cmd.Flags().GetStringSlice("entrypoint")
 	excludes, _ := cmd.Flags().GetStringSlice("exclude")
 
+	// JS config
+	jsEnabled, _ := cmd.Flags().GetBool("js-enabled")
+	jsWait, _ := cmd.Flags().GetDuration("js-wait")
+	jsMaxTabs, _ := cmd.Flags().GetInt("js-max-tabs")
+	jsExecutable, _ := cmd.Flags().GetString("js-executable")
+	jsFlags, _ := cmd.Flags().GetStringSlice("js-flag")
+
 	log := c.Log()
 
 	// Build exclude patterns
@@ -73,6 +83,33 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// Create the appropriate fetcher based on JS config
+	var fetcher crawler.Fetcher
+	if jsEnabled {
+		wait := int(jsWait.Milliseconds())
+		if wait == 0 {
+			wait = 2000 // default 2 seconds
+		}
+		maxTabs := jsMaxTabs
+		if maxTabs == 0 {
+			maxTabs = 1
+		}
+		jsFetcher, err := crawler.NewJSFetcher(crawler.JSFetcherOptions{
+			Wait:           wait,
+			MaxTabs:        maxTabs,
+			ExecutablePath: jsExecutable,
+			Flags:          jsFlags,
+			Logger:         log,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create JS fetcher: %w", err)
+		}
+		defer jsFetcher.Close()
+		fetcher = jsFetcher
+	} else {
+		fetcher = crawler.NewHTTPFetcher(nil)
+	}
+
 	fmt.Printf("Crawling %s...\n", siteURL.String())
 
 	cr := crawler.New(crawler.Config{
@@ -80,8 +117,14 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		WorkerCount: workers,
 		Entrypoints: entrypoints,
 		Logger:      log,
+		Fetcher:     fetcher,
 
 		OnNewLink: func(page *crawler.Page, link crawler.Link) error {
+			// Only extract links from crawlable pages (HTML)
+			if !isCrawlable(page.URL) {
+				return errors.New("source page is not crawlable")
+			}
+
 			// Only follow internal links
 			if !link.URL.IsInternal(page.URL) {
 				return ErrExternal
@@ -96,20 +139,33 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		},
 
 		OnPage: func(page *crawler.Page) {
-			// Analyze the page for images
+			// Only report on HTML pages, not assets
+			if !isCrawlable(page.URL) {
+				return
+			}
+
+			// Analyze the page for metadata and images
 			analysis, err := analyzer.Analyze(page.Body, page.URL)
 			if err != nil {
 				log.Error().Err(err).Str("url", page.URL.String()).Msg("Failed to analyze page")
 				return
 			}
 
+			// Run linting rules
+			lints, err := linter.Check(page.Body, page.URL, analysis)
+			if err != nil {
+				log.Error().Err(err).Str("url", page.URL.String()).Msg("Failed to lint page")
+				lints = nil
+			}
+
 			pageReport := reporter.PageReport{
 				URL:         page.URL.String(),
-				Title:       page.Title,
-				Description: page.Description,
-				Canonical:   page.Canonical,
+				Title:       analysis.Title,
+				Description: analysis.Description,
+				Canonical:   analysis.Canonical,
 				StatusCode:  page.StatusCode,
 				Images:      analysis.Images,
+				Lints:       lints,
 			}
 
 			pagesMu.Lock()
@@ -119,6 +175,7 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 			log.Info().
 				Str("url", page.URL.String()).
 				Int("images", len(analysis.Images)).
+				Int("lints", len(lints)).
 				Msg("Analyzed page")
 		},
 	})
@@ -184,5 +241,18 @@ func NewReportCommand(c *cli.CLI) *cobra.Command {
 	cmd.Flags().StringSlice("entrypoint", []string{"/"}, "Entrypoint paths to seed the crawl")
 	cmd.Flags().StringSliceP("exclude", "E", []string{}, "Exclude URLs matching a glob pattern")
 
+	// JS flags
+	cmd.Flags().Bool("js-enabled", false, "Enable JavaScript-based crawling for SPAs")
+	cmd.Flags().Duration("js-wait", 0, "Time to wait for JS to execute, e.g. 2s, 500ms")
+	cmd.Flags().Int("js-max-tabs", 1, "Maximum parallel Chrome tabs for JS fetching")
+	cmd.Flags().String("js-executable", "", "Path to Chrome/Chromium executable")
+	cmd.Flags().StringSlice("js-flag", []string{}, "Additional Chrome flags")
+
 	return cmd
+}
+
+// isCrawlable checks if a URL should be crawled for more links.
+func isCrawlable(u *url.URL) bool {
+	ext := filepath.Ext(u.Path)
+	return ext == "" || ext == ".html"
 }

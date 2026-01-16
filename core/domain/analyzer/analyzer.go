@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"strings"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/felixdorn/bare/core/domain/url"
-	"golang.org/x/net/html"
 )
 
 // Image represents an image found on a page.
@@ -19,110 +19,66 @@ type Image struct {
 
 // Analysis contains the results of analyzing a page.
 type Analysis struct {
-	Images []Image
-	// Future: lint results, OpenGraph data, etc.
+	Title       string
+	Description string
+	Canonical   string
+	Images      []Image
 }
 
-// Analyze parses an HTML body and extracts images with their metadata.
+// Analyze parses an HTML body and extracts metadata and images.
 func Analyze(body []byte, pageURL *url.URL) (*Analysis, error) {
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
 	analysis := &Analysis{
-		Images: []Image{},
+		Title:       strings.TrimSpace(doc.Find("head title").First().Text()),
+		Description: doc.Find(`head meta[name="description"]`).AttrOr("content", ""),
+		Canonical:   doc.Find(`head link[rel="canonical"]`).AttrOr("href", ""),
+		Images:      []Image{},
 	}
 
-	z := html.NewTokenizer(bytes.NewReader(body))
-
-	for {
-		tt := z.Next()
-
-		if tt == html.ErrorToken {
-			break
+	// Extract images
+	doc.Find("img[src]").Each(func(i int, s *goquery.Selection) {
+		src, _ := s.Attr("src")
+		srcURL, err := url.Parse(src)
+		if err != nil {
+			return
 		}
 
-		if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
-			continue
+		// Only include http/https URLs (or relative URLs)
+		if srcURL.Scheme != "" && srcURL.Scheme != "http" && srcURL.Scheme != "https" {
+			return
 		}
 
-		t := z.Token()
+		analysis.Images = append(analysis.Images, Image{
+			URL:    pageURL.ResolveReference(srcURL),
+			Src:    src,
+			Alt:    s.AttrOr("alt", ""),
+			Width:  s.AttrOr("width", ""),
+			Height: s.AttrOr("height", ""),
+		})
+	})
 
-		if t.Data == "img" {
-			img := parseImageTag(t, pageURL)
-			if img != nil {
-				analysis.Images = append(analysis.Images, *img)
+	// Extract picture > source srcset images
+	doc.Find("source[srcset]").Each(func(i int, s *goquery.Selection) {
+		srcset, _ := s.Attr("srcset")
+		for _, part := range strings.Split(srcset, ",") {
+			fields := strings.Fields(strings.TrimSpace(part))
+			if len(fields) == 0 {
+				continue
 			}
-		}
-
-		// Also handle picture > source elements
-		if t.Data == "source" {
-			// Check if it has srcset (picture element source)
-			for _, attr := range t.Attr {
-				if attr.Key == "srcset" {
-					// Parse srcset - take the first URL
-					srcset := strings.TrimSpace(attr.Val)
-					if srcset != "" {
-						parts := strings.Split(srcset, ",")
-						for _, part := range parts {
-							part = strings.TrimSpace(part)
-							fields := strings.Fields(part)
-							if len(fields) > 0 {
-								srcURL, err := url.Parse(fields[0])
-								if err == nil {
-									resolvedURL := pageURL.ResolveReference(srcURL)
-									analysis.Images = append(analysis.Images, Image{
-										URL: resolvedURL,
-										Src: fields[0],
-										Alt: "", // source elements don't have alt
-									})
-								}
-							}
-						}
-					}
-					break
-				}
+			srcURL, err := url.Parse(fields[0])
+			if err != nil {
+				continue
 			}
+			analysis.Images = append(analysis.Images, Image{
+				URL: pageURL.ResolveReference(srcURL),
+				Src: fields[0],
+			})
 		}
-	}
+	})
 
 	return analysis, nil
-}
-
-// parseImageTag extracts image information from an img tag.
-func parseImageTag(t html.Token, pageURL *url.URL) *Image {
-	var src, alt, width, height string
-
-	for _, attr := range t.Attr {
-		switch attr.Key {
-		case "src":
-			src = attr.Val
-		case "alt":
-			alt = attr.Val
-		case "width":
-			width = attr.Val
-		case "height":
-			height = attr.Val
-		}
-	}
-
-	if src == "" {
-		return nil
-	}
-
-	srcURL, err := url.Parse(src)
-	if err != nil {
-		return nil
-	}
-
-	// Only include http/https URLs (or relative URLs)
-	if srcURL.Scheme != "" && srcURL.Scheme != "http" && srcURL.Scheme != "https" {
-		return nil
-	}
-
-	resolvedURL := pageURL.ResolveReference(srcURL)
-
-	return &Image{
-		URL:    resolvedURL,
-		Src:    src,
-		Alt:    alt,
-		Width:  width,
-		Height: height,
-	}
 }

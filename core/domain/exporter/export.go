@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -24,18 +23,18 @@ var (
 
 // Export manages the exporting process using the crawler.
 type Export struct {
-	Conf       *config.Config
-	log        zerolog.Logger
-	httpClient *http.Client
+	Conf    *config.Config
+	log     zerolog.Logger
+	fetcher crawler.Fetcher
 }
 
 // NewExport creates a new Export instance.
-// The httpClient parameter is optional; if nil, a default client will be used.
-func NewExport(conf *config.Config, log zerolog.Logger, httpClient *http.Client) *Export {
+// The fetcher parameter is optional; if nil, a default HTTPFetcher will be used.
+func NewExport(conf *config.Config, log zerolog.Logger, fetcher crawler.Fetcher) *Export {
 	return &Export{
-		Conf:       conf,
-		log:        log,
-		httpClient: httpClient,
+		Conf:    conf,
+		log:     log,
+		fetcher: fetcher,
 	}
 }
 
@@ -52,7 +51,7 @@ func (e *Export) Run(ctx context.Context) error {
 		WorkerCount: e.Conf.WorkersCount,
 		Entrypoints: entrypoints,
 		Logger:      e.log,
-		HTTPClient:  e.httpClient,
+		Fetcher:     e.fetcher,
 
 		OnNewLink: func(page *crawler.Page, link crawler.Link) error {
 			// Only extract links from crawlable pages (HTML)

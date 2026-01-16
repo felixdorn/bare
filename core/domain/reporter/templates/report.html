@@ -4,206 +4,134 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SEO Report - {{.SiteURL}}</title>
-    <style>
-        :root {
-            --bg: #f5f5f5;
-            --card-bg: #fff;
-            --text: #333;
-            --text-muted: #666;
-            --border: #ddd;
-            --primary: #2563eb;
-            --success: #16a34a;
-            --warning: #d97706;
-            --error: #dc2626;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-        }
-        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-        header {
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--border);
-            padding: 1.5rem 0;
-            margin-bottom: 2rem;
-        }
-        header .container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-top: 0;
-            padding-bottom: 0;
-        }
-        h1 { font-size: 1.5rem; font-weight: 600; }
-        .meta { color: var(--text-muted); font-size: 0.875rem; }
-        .stats {
-            display: flex;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-        .stat {
-            background: var(--card-bg);
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-        }
-        .stat-value { font-size: 2rem; font-weight: 700; color: var(--primary); }
-        .stat-label { color: var(--text-muted); font-size: 0.875rem; }
-        .page-list { display: flex; flex-direction: column; gap: 1rem; }
-        .page-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .page-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 1rem;
-        }
-        .page-url {
-            font-family: monospace;
-            font-size: 0.875rem;
-            color: var(--primary);
-            word-break: break-all;
-        }
-        .page-status {
-            font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-weight: 500;
-            white-space: nowrap;
-        }
-        .status-200 { background: #dcfce7; color: var(--success); }
-        .status-3xx { background: #fef3c7; color: var(--warning); }
-        .status-4xx, .status-5xx { background: #fee2e2; color: var(--error); }
-        .page-meta { padding: 1rem 1.5rem; }
-        .page-meta dt { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-top: 0.75rem; }
-        .page-meta dt:first-child { margin-top: 0; }
-        .page-meta dd { margin-top: 0.25rem; }
-        .page-meta dd:empty::after { content: '(not set)'; color: var(--text-muted); font-style: italic; }
-        .images-section { border-top: 1px solid var(--border); }
-        .images-toggle {
-            width: 100%;
-            padding: 1rem 1.5rem;
-            background: #fafafa;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .images-toggle:hover { background: #f0f0f0; }
-        .images-toggle .arrow { transition: transform 0.2s; }
-        .images-toggle.open .arrow { transform: rotate(180deg); }
-        .images-content {
-            display: none;
-            padding: 1rem 1.5rem;
-            border-top: 1px solid var(--border);
-        }
-        .images-content.open { display: block; }
-        .image-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        .image-item {
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .image-preview {
-            aspect-ratio: 16/9;
-            background: #f0f0f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-        .image-preview img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-        }
-        .image-info { padding: 0.75rem; font-size: 0.75rem; }
-        .image-alt { color: var(--text); word-break: break-word; }
-        .image-alt:empty::after { content: '(no alt text)'; color: var(--warning); font-style: italic; }
-        .image-src { color: var(--text-muted); font-family: monospace; word-break: break-all; margin-top: 0.25rem; }
-        .no-images { color: var(--text-muted); font-style: italic; padding: 1rem; text-align: center; }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <header>
-        <div class="container">
-            <h1>SEO Report</h1>
-            <div class="meta">
+<body class="bg-gray-100 text-gray-900">
+    <header class="bg-white border-b border-gray-200 py-6 mb-8">
+        <div class="max-w-6xl mx-auto px-8 flex justify-between items-center">
+            <h1 class="text-xl font-semibold">SEO Report</h1>
+            <div class="text-sm text-gray-500 text-right">
                 <div>{{.SiteURL}}</div>
                 <div>Generated: {{.GeneratedAt.Format "2006-01-02 15:04:05"}}</div>
             </div>
         </div>
     </header>
 
-    <main class="container">
-        <div class="stats">
-            <div class="stat">
-                <div class="stat-value">{{.TotalPages}}</div>
-                <div class="stat-label">Pages Crawled</div>
+    <main class="max-w-6xl mx-auto px-8 pb-8">
+        <div class="flex flex-wrap gap-4 mb-8">
+            <div class="bg-white p-6 rounded-lg border border-gray-200">
+                <div class="text-4xl font-bold text-blue-600">{{.TotalPages}}</div>
+                <div class="text-sm text-gray-500">Pages Crawled</div>
             </div>
-            <div class="stat">
-                <div class="stat-value">{{.TotalImages}}</div>
-                <div class="stat-label">Images Found</div>
+            <div class="bg-white p-6 rounded-lg border border-gray-200">
+                <div class="text-4xl font-bold text-blue-600">{{.TotalImages}}</div>
+                <div class="text-sm text-gray-500">Images Found</div>
             </div>
+            {{if .TotalLints}}
+            <div class="bg-white p-6 rounded-lg border border-gray-200">
+                <div class="text-4xl font-bold text-orange-600">{{.TotalLints}}</div>
+                <div class="text-sm text-gray-500">Issues Found</div>
+            </div>
+            {{end}}
         </div>
 
-        <div class="page-list">
+        {{if .TotalLints}}
+        <div class="flex flex-wrap gap-3 mb-8">
+            {{with index .LintCounts "critical"}}
+            <div class="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-800 rounded-lg text-sm font-medium">
+                <span class="w-2 h-2 bg-red-600 rounded-full"></span>
+                Critical: {{.}}
+            </div>
+            {{end}}
+            {{with index .LintCounts "high"}}
+            <div class="flex items-center gap-2 px-3 py-2 bg-orange-100 text-orange-800 rounded-lg text-sm font-medium">
+                <span class="w-2 h-2 bg-orange-600 rounded-full"></span>
+                High: {{.}}
+            </div>
+            {{end}}
+            {{with index .LintCounts "medium"}}
+            <div class="flex items-center gap-2 px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm font-medium">
+                <span class="w-2 h-2 bg-yellow-600 rounded-full"></span>
+                Medium: {{.}}
+            </div>
+            {{end}}
+            {{with index .LintCounts "low"}}
+            <div class="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
+                <span class="w-2 h-2 bg-blue-600 rounded-full"></span>
+                Low: {{.}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
+        <div class="flex flex-col gap-4">
             {{range $index, $page := .Pages}}
-            <article class="page-card">
-                <div class="page-header">
-                    <a href="{{$page.URL}}" class="page-url" target="_blank">{{$page.URL}}</a>
-                    <span class="page-status {{if eq $page.StatusCode 200}}status-200{{else if and (ge $page.StatusCode 300) (lt $page.StatusCode 400)}}status-3xx{{else if and (ge $page.StatusCode 400) (lt $page.StatusCode 500)}}status-4xx{{else}}status-5xx{{end}}">
+            <article class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div class="p-4 border-b border-gray-200 flex justify-between items-start gap-4">
+                    <a href="{{$page.URL}}" class="font-mono text-sm text-blue-600 hover:underline break-all" target="_blank">{{$page.URL}}</a>
+                    <span class="text-xs px-2 py-1 rounded font-medium whitespace-nowrap {{if eq $page.StatusCode 200}}bg-green-100 text-green-700{{else if and (ge $page.StatusCode 300) (lt $page.StatusCode 400)}}bg-yellow-100 text-yellow-700{{else}}bg-red-100 text-red-700{{end}}">
                         {{$page.StatusCode}}
                     </span>
                 </div>
-                <dl class="page-meta">
-                    <dt>Title</dt>
-                    <dd>{{$page.Title}}</dd>
-                    <dt>Description</dt>
-                    <dd>{{$page.Description}}</dd>
+                <dl class="p-4">
+                    <dt class="font-semibold text-xs uppercase text-gray-500">Title</dt>
+                    <dd class="mt-1 mb-3">{{if $page.Title}}{{$page.Title}}{{else}}<span class="text-gray-400 italic">(not set)</span>{{end}}</dd>
+                    <dt class="font-semibold text-xs uppercase text-gray-500">Description</dt>
+                    <dd class="mt-1 mb-3">{{if $page.Description}}{{$page.Description}}{{else}}<span class="text-gray-400 italic">(not set)</span>{{end}}</dd>
                     {{if $page.Canonical}}
-                    <dt>Canonical</dt>
-                    <dd>{{$page.Canonical}}</dd>
+                    <dt class="font-semibold text-xs uppercase text-gray-500">Canonical</dt>
+                    <dd class="mt-1">{{$page.Canonical}}</dd>
                     {{end}}
                 </dl>
-                <div class="images-section">
-                    <button class="images-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
-                        <span>Images ({{len $page.Images}})</span>
-                        <span class="arrow">&#9660;</span>
+
+                {{if $page.Lints}}
+                <div class="border-t border-gray-200">
+                    <button class="lints-toggle w-full px-4 py-3 bg-orange-50 hover:bg-orange-100 cursor-pointer flex justify-between items-center text-sm font-medium text-orange-800" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('hidden');">
+                        <span>Issues ({{len $page.Lints}})</span>
+                        <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
-                    <div class="images-content">
-                        {{if $page.Images}}
-                        <div class="image-grid">
-                            {{range $page.Images}}
-                            <div class="image-item">
-                                <div class="image-preview">
-                                    <img src="{{.URL}}" alt="{{.Alt}}" loading="lazy" onerror="this.style.display='none'">
+                    <div class="hidden p-4 border-t border-gray-200 space-y-3">
+                        {{range $page.Lints}}
+                        <div class="flex items-start gap-3 p-3 rounded-lg {{if eq .Severity "critical"}}bg-red-50 border-l-4 border-red-500{{else if eq .Severity "high"}}bg-orange-50 border-l-4 border-orange-500{{else if eq .Severity "medium"}}bg-yellow-50 border-l-4 border-yellow-500{{else}}bg-blue-50 border-l-4 border-blue-500{{end}}">
+                            <div class="flex-1">
+                                <div class="font-medium text-gray-900">{{.Message}}</div>
+                                {{if .Evidence}}
+                                <div class="text-sm text-gray-600 mt-1 font-mono">{{.Evidence}}</div>
+                                {{end}}
+                                <div class="flex gap-2 mt-2">
+                                    <span class="text-xs px-2 py-0.5 rounded {{if eq .Severity "critical"}}bg-red-100 text-red-700{{else if eq .Severity "high"}}bg-orange-100 text-orange-700{{else if eq .Severity "medium"}}bg-yellow-100 text-yellow-700{{else}}bg-blue-100 text-blue-700{{end}}">{{.Severity}}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">{{.Category}}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700">{{.Tag}}</span>
                                 </div>
-                                <div class="image-info">
-                                    <div class="image-alt">{{.Alt}}</div>
-                                    <div class="image-src">{{.Src}}</div>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+
+                <div class="border-t border-gray-200">
+                    <button class="images-toggle w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 cursor-pointer flex justify-between items-center text-sm font-medium" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('hidden');">
+                        <span>Images ({{len $page.Images}})</span>
+                        <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="hidden p-4 border-t border-gray-200">
+                        {{if $page.Images}}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {{range $page.Images}}
+                            <div class="border border-gray-200 rounded overflow-hidden">
+                                <div class="aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
+                                    <img src="{{.URL}}" alt="{{.Alt}}" loading="lazy" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'">
+                                </div>
+                                <div class="p-3 text-xs">
+                                    <div class="text-gray-900 break-words">{{if .Alt}}{{.Alt}}{{else}}<span class="text-yellow-600 italic">(no alt text)</span>{{end}}</div>
+                                    <div class="text-gray-500 font-mono break-all mt-1">{{.Src}}</div>
                                 </div>
                             </div>
                             {{end}}
                         </div>
                         {{else}}
-                        <div class="no-images">No images found on this page</div>
+                        <div class="text-gray-500 italic text-center py-4">No images found on this page</div>
                         {{end}}
                     </div>
                 </div>

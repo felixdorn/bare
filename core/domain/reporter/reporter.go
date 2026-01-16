@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/felixdorn/bare/core/domain/analyzer"
+	"github.com/felixdorn/bare/core/domain/linter"
 )
 
 //go:embed templates/*.html
@@ -20,6 +21,7 @@ type PageReport struct {
 	Canonical   string
 	StatusCode  int
 	Images      []analyzer.Image
+	Lints       []linter.Lint
 }
 
 // Report contains all the data for the full report.
@@ -29,6 +31,8 @@ type Report struct {
 	Pages       []PageReport
 	TotalPages  int
 	TotalImages int
+	TotalLints  int
+	LintCounts  map[string]int
 }
 
 // Reporter generates HTML reports from crawl results.
@@ -55,8 +59,15 @@ func (r *Reporter) Generate(w io.Writer, report *Report) error {
 	// Calculate totals
 	report.TotalPages = len(report.Pages)
 	report.TotalImages = 0
+	report.TotalLints = 0
+	report.LintCounts = make(map[string]int)
+
 	for _, p := range report.Pages {
 		report.TotalImages += len(p.Images)
+		report.TotalLints += len(p.Lints)
+		for _, l := range p.Lints {
+			report.LintCounts[string(l.Severity)]++
+		}
 	}
 
 	return r.tmpl.ExecuteTemplate(w, "report.html", report)

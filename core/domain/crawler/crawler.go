@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/felixdorn/bare/core/domain/url"
 	"github.com/rs/zerolog"
@@ -39,7 +36,7 @@ type Config struct {
 	WorkerCount int
 	Entrypoints []string
 	Logger      zerolog.Logger
-	HTTPClient  *http.Client
+	Fetcher     Fetcher
 
 	// OnNewLink is called for every link discovered on a page.
 	// Return nil to follow the link, or an error to skip it.
@@ -52,9 +49,8 @@ type Config struct {
 
 // Crawler manages the crawling process.
 type Crawler struct {
-	cfg        Config
-	httpClient *http.Client
-	log        zerolog.Logger
+	cfg Config
+	log zerolog.Logger
 }
 
 // workerResult holds the outcome of a worker's task.
@@ -65,37 +61,38 @@ type workerResult struct {
 	err     error
 }
 
-// normalizeURL returns a canonical string representation of a URL for deduplication.
-// It strips fragments and normalizes the scheme to match the base URL.
-func normalizeURL(u *url.URL, baseURL *url.URL) string {
+// normalizeURL returns a new URL with fragment stripped, scheme normalized, and trailing slash removed.
+// This ensures we never crawl the same page twice due to different fragments, schemes, or trailing slashes.
+func normalizeURL(u *url.URL, baseURL *url.URL) *url.URL {
 	// Create a copy to avoid modifying the original
 	normalized := *u.URL
-	// Strip fragment
+	// Strip fragment - fragments are client-side only
 	normalized.Fragment = ""
 	// Normalize scheme to match base URL
 	normalized.Scheme = baseURL.Scheme
-	return normalized.String()
+	// Strip trailing slash (except for root path)
+	if len(normalized.Path) > 1 && strings.HasSuffix(normalized.Path, "/") {
+		normalized.Path = strings.TrimSuffix(normalized.Path, "/")
+	}
+	return &url.URL{URL: &normalized}
 }
 
 // New creates a new Crawler instance.
 func New(cfg Config) *Crawler {
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
-		httpClient = &http.Client{
-			Timeout: 10 * time.Second,
-		}
-	}
-
 	workerCount := cfg.WorkerCount
 	if workerCount <= 0 {
 		workerCount = 10
 	}
 	cfg.WorkerCount = workerCount
 
+	// Default to HTTPFetcher if no fetcher provided
+	if cfg.Fetcher == nil {
+		cfg.Fetcher = NewHTTPFetcher(nil)
+	}
+
 	return &Crawler{
-		cfg:        cfg,
-		httpClient: httpClient,
-		log:        cfg.Logger,
+		cfg: cfg,
+		log: cfg.Logger,
 	}
 }
 
@@ -128,11 +125,12 @@ func (c *Crawler) Run(ctx context.Context) error {
 			continue
 		}
 		resolvedURL := c.cfg.BaseURL.ResolveReference(u)
-		normalizedKey := normalizeURL(resolvedURL, c.cfg.BaseURL)
+		normalizedURL := normalizeURL(resolvedURL, c.cfg.BaseURL)
+		normalizedKey := normalizedURL.String()
 
 		if !visited[normalizedKey] {
 			visited[normalizedKey] = true
-			queue = append(queue, resolvedURL)
+			queue = append(queue, normalizedURL)
 		}
 	}
 	c.log.Debug().Int("queue_size", len(queue)).Msg("Initial queue populated")
@@ -176,11 +174,12 @@ controllerLoop:
 
 			// Add URLs that passed the OnNewLink filter to the queue
 			for _, link := range result.toQueue {
-				normalizedKey := normalizeURL(link, c.cfg.BaseURL)
+				normalizedURL := normalizeURL(link, c.cfg.BaseURL)
+				normalizedKey := normalizedURL.String()
 				if !visited[normalizedKey] {
 					visited[normalizedKey] = true
-					queue = append(queue, link)
-					c.log.Debug().Str("url", link.String()).Msg("Queued new link")
+					queue = append(queue, normalizedURL)
+					c.log.Debug().Str("url", normalizedKey).Msg("Queued new link")
 				}
 			}
 		}
@@ -244,31 +243,20 @@ func (c *Crawler) worker(ctx context.Context, id int, wg *sync.WaitGroup, tasks 
 
 // fetchPage fetches a URL and parses it into a Page struct.
 func (c *Crawler) fetchPage(ctx context.Context, pageURL *url.URL) (*Page, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL.String(), nil)
+	result, err := c.cfg.Fetcher.Fetch(ctx, pageURL)
 	if err != nil {
-		return nil, fmt.Errorf("could not create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("could not reach %s: %w", pageURL, err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("could not read response body: %w", err)
+		return nil, err
 	}
 
 	page := &Page{
 		URL:        pageURL,
-		StatusCode: resp.StatusCode,
-		Body:       bodyBytes,
+		StatusCode: result.StatusCode,
+		Body:       result.Body,
 		Links:      []Link{},
 	}
 
 	// Parse HTML for metadata and links
-	c.parseHTML(page, bodyBytes)
+	c.parseHTML(page, result.Body)
 
 	return page, nil
 }
@@ -277,7 +265,8 @@ func (c *Crawler) fetchPage(ctx context.Context, pageURL *url.URL) (*Page, error
 func (c *Crawler) parseHTML(page *Page, body []byte) {
 	z := html.NewTokenizer(bytes.NewReader(body))
 
-	var inTitle bool
+	var inHead, inTitle bool
+	var titleText strings.Builder
 	var currentLinkText strings.Builder
 
 	// Track the current <a> tag we're processing
@@ -296,8 +285,14 @@ func (c *Crawler) parseHTML(page *Page, body []byte) {
 			tagName := t.Data
 
 			switch tagName {
+			case "head":
+				inHead = true
+
 			case "title":
-				inTitle = true
+				if inHead {
+					inTitle = true
+					titleText.Reset()
+				}
 
 			case "meta":
 				name, content := "", ""
@@ -382,8 +377,11 @@ func (c *Crawler) parseHTML(page *Page, body []byte) {
 		case html.EndTagToken:
 			t := z.Token()
 			switch t.Data {
+			case "head":
+				inHead = false
 			case "title":
 				inTitle = false
+				page.Title = strings.TrimSpace(titleText.String())
 			case "a":
 				if currentAnchor != nil {
 					currentAnchor.Text = strings.TrimSpace(currentLinkText.String())
@@ -395,7 +393,7 @@ func (c *Crawler) parseHTML(page *Page, body []byte) {
 		case html.TextToken:
 			text := string(z.Text())
 			if inTitle {
-				page.Title = strings.TrimSpace(text)
+				titleText.WriteString(text)
 			}
 			if currentAnchor != nil {
 				currentLinkText.WriteString(text)

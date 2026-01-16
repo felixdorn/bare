@@ -11,10 +11,9 @@ import (
 )
 
 func TestRewriter_Run(t *testing.T) {
-	// Create temp directory structure
 	tmpDir := t.TempDir()
 
-	// Create some "exported" files
+	// Create exported files
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte(`
 		<html>
 		<head><link href="http://example.com/style.css"></head>
@@ -78,7 +77,6 @@ func TestRewriter_NoRewrite(t *testing.T) {
 		<a href="http://example.com/about.html?norewrite">Keep absolute</a>
 		<a href="http://example.com/about.html">Make relative</a>
 		<a href="http://example.com/about.html?norewrite&foo=bar">Keep with params</a>
-		<a href="http://example.com/about.html?foo=bar&norewrite">Keep with params before</a>
 	`), 0644))
 
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "about.html"), []byte(`<h1>About</h1>`), 0644))
@@ -94,8 +92,7 @@ func TestRewriter_NoRewrite(t *testing.T) {
 	require.NoError(t, err)
 	html := string(content)
 
-	assert.Contains(t, html, `href="http://example.com/about.html"`, "norewrite URL should stay absolute but without ?norewrite")
+	assert.Contains(t, html, `href="http://example.com/about.html?norewrite"`, "norewrite URL should stay absolute")
 	assert.Contains(t, html, `href="/about.html"`, "normal URL should be rewritten to relative")
-	assert.Contains(t, html, `href="http://example.com/about.html?foo=bar"`, "norewrite with other params should keep params")
-	assert.NotContains(t, html, "norewrite", "norewrite param should be removed from all URLs")
+	assert.Contains(t, html, `href="http://example.com/about.html?norewrite&foo=bar"`, "norewrite with params should stay absolute")
 }

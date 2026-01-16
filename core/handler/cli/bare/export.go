@@ -10,8 +10,8 @@ import (
 	"syscall"
 
 	"github.com/felixdorn/bare/core/domain/config"
+	"github.com/felixdorn/bare/core/domain/crawler"
 	"github.com/felixdorn/bare/core/domain/exporter"
-	"github.com/felixdorn/bare/core/domain/js"
 	"github.com/felixdorn/bare/core/domain/rewriter"
 	"github.com/felixdorn/bare/core/domain/url"
 	"github.com/felixdorn/bare/core/handler/cli/cli"
@@ -117,42 +117,34 @@ func runExport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		conf.JS.Flags = flags
 	}
 
+	if cmd.Flags().Changed("js-max-tabs") {
+		maxTabs, _ := cmd.Flags().GetInt("js-max-tabs")
+		conf.JS.MaxTabs = maxTabs
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	var jsCrawler js.Crawler
+	// Create the appropriate fetcher based on JS config
+	var fetcher crawler.Fetcher
 	if conf.JS.Enabled {
-		jsCrawler = js.New(conf, c.Log())
+		jsFetcher, err := crawler.NewJSFetcher(crawler.JSFetcherOptions{
+			Wait:           int(conf.JS.Wait.Milliseconds()),
+			MaxTabs:        conf.JS.MaxTabs,
+			ExecutablePath: conf.JS.ExecutablePath,
+			Flags:          conf.JS.Flags,
+			Logger:         c.Log(),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create JS fetcher: %w", err)
+		}
+		defer jsFetcher.Close()
+		fetcher = jsFetcher
 	} else {
-		jsCrawler = js.NewNoop()
+		fetcher = crawler.NewHTTPFetcher(nil)
 	}
 
-	jsURLs, err := jsCrawler.Run(ctx)
-	if err != nil {
-		return fmt.Errorf("error during JavaScript crawl: %w", err)
-	}
-
-	if len(jsURLs) > 0 {
-		log := c.Log()
-		log.Info().Int("count", len(jsURLs)).Msg("seeding crawler with URLs discovered via JavaScript")
-
-		// Add discovered URLs to the entrypoints list, avoiding duplicates
-		existingEntrypointUrls := make(map[string]struct{})
-		for _, u := range conf.Pages.Entrypoints {
-			existingEntrypointUrls[string(u)] = struct{}{}
-		}
-
-		for _, u := range jsURLs {
-			// we only care about the path and query
-			p := url.Path(u.RequestURI())
-			if _, exists := existingEntrypointUrls[string(p)]; !exists {
-				conf.Pages.Entrypoints = append(conf.Pages.Entrypoints, p)
-				existingEntrypointUrls[string(p)] = struct{}{}
-			}
-		}
-	}
-
-	export := exporter.NewExport(conf, c.Log(), nil)
+	export := exporter.NewExport(conf, c.Log(), fetcher)
 	if err := export.Run(ctx); err != nil {
 		return err
 	}
@@ -188,6 +180,7 @@ The starting URL can be provided as an argument. If not provided, the URL from b
 	cmd.Flags().Bool("with-js", false, "Enable JavaScript-based crawling to discover more assets")
 	_ = cmd.Flags().MarkDeprecated("with-js", "use --js-enabled instead")
 	cmd.Flags().Duration("js-wait", 0, "Time to wait for JS to execute, e.g. 2s, 500ms")
+	cmd.Flags().Int("js-max-tabs", 1, "Maximum parallel Chrome tabs for JS fetching")
 	cmd.Flags().String("js-executable", "", "Path to Chrome/Chromium executable")
 	cmd.Flags().StringSlice("js-flag", []string{}, "Additional Chrome flags (can be used multiple times)")
 
