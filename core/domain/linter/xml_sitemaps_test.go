@@ -288,3 +288,58 @@ func TestSiteLint_SitemapHasNoindexURL(t *testing.T) {
 	// /noindex-not-in-sitemap is noindex but NOT in sitemap - should not trigger
 	assert.Nil(t, findSiteLint(results["http://example.com/noindex-not-in-sitemap"], "sitemap-has-noindex-url"))
 }
+
+// Tests for sitemap-has-4xx-url rule
+
+func TestSiteLint_SitemapHas4xxURL(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/",
+			StatusCode: 200,
+			InSitemap:  true,
+		},
+		{
+			URL:        "http://example.com/not-found",
+			StatusCode: 404,
+			InSitemap:  true,
+		},
+		{
+			URL:        "http://example.com/not-in-sitemap",
+			StatusCode: 404,
+			InSitemap:  false,
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// /not-found is 404 AND in sitemap - should trigger
+	lint := findSiteLint(results["http://example.com/not-found"], "sitemap-has-4xx-url")
+	assert.NotNil(t, lint, "expected sitemap-has-4xx-url lint")
+	assert.Equal(t, linter.Critical, lint.Severity)
+	assert.Equal(t, linter.XMLSitemaps, lint.Category)
+	assert.Contains(t, lint.Evidence, "404")
+
+	// / is 200 in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "sitemap-has-4xx-url"))
+
+	// /not-in-sitemap is 404 but NOT in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/not-in-sitemap"], "sitemap-has-4xx-url"))
+}
+
+func TestSiteLint_SitemapHas4xxURL_Various4xxCodes(t *testing.T) {
+	codes := []int{400, 401, 403, 404, 410, 451}
+
+	for _, code := range codes {
+		pages := []linter.SiteLintInput{
+			{
+				URL:        "http://example.com/error",
+				StatusCode: code,
+				InSitemap:  true,
+			},
+		}
+
+		results := linter.RunSiteRules(pages)
+		lint := findSiteLint(results["http://example.com/error"], "sitemap-has-4xx-url")
+		assert.NotNil(t, lint, "expected lint for status code %d", code)
+	}
+}

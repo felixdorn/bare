@@ -56,4 +56,30 @@ func init() {
 		return results
 	}
 	linter.RegisterSiteRule(noindexInSitemap)
+
+	// Rule: 4XX URL in XML Sitemap
+	notFoundInSitemap := &linter.SiteRule{
+		ID:       "sitemap-has-4xx-url",
+		Name:     "URL in XML sitemap returns not found (4XX)",
+		Severity: linter.Critical,
+		Category: linter.XMLSitemaps,
+		Tag:      linter.Issue,
+	}
+	notFoundInSitemap.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+		var results []linter.SiteLintResult
+
+		for _, page := range pages {
+			if page.InSitemap && page.StatusCode >= 400 && page.StatusCode < 500 {
+				results = append(results, linter.SiteLintResult{
+					URL: page.URL,
+					Lints: []linter.Lint{
+						notFoundInSitemap.Emit(fmt.Sprintf("HTTP %d", page.StatusCode)),
+					},
+				})
+			}
+		}
+
+		return results
+	}
+	linter.RegisterSiteRule(notFoundInSitemap)
 }
