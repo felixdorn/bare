@@ -165,3 +165,217 @@ func TestSiteLint_BrokenInternalURL_NoCrawlError(t *testing.T) {
 	assert.Nil(t, findSiteLint(results["http://example.com/"], "broken-internal-url-crawl-error"))
 	assert.Nil(t, findSiteLint(results["http://example.com/page"], "broken-internal-url-crawl-error"))
 }
+
+// Uppercase URL tests
+
+func TestLinter_UppercaseURL_UppercaseFolder(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/Folder/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "uppercase-url")
+	assert.NotNil(t, found, "expected uppercase-url lint")
+	assert.Equal(t, linter.Medium, found.Severity)
+	assert.Equal(t, linter.Internal, found.Category)
+	assert.Equal(t, linter.PotentialIssue, found.Tag)
+	assert.Contains(t, found.Evidence, "/Folder/page.html")
+}
+
+func TestLinter_UppercaseURL_UppercasePage(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/Page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "uppercase-url")
+	assert.NotNil(t, found, "expected uppercase-url lint for uppercase page name")
+	assert.Contains(t, found.Evidence, "/folder/Page.html")
+}
+
+func TestLinter_UppercaseURL_UppercaseExtension(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/page.HTML")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "uppercase-url")
+	assert.NotNil(t, found, "expected uppercase-url lint for uppercase extension")
+	assert.Contains(t, found.Evidence, "/folder/page.HTML")
+}
+
+func TestLinter_UppercaseURL_LowercaseOK(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "uppercase-url")
+	assert.Nil(t, found, "should not trigger for lowercase URL")
+}
+
+func TestLinter_UppercaseURL_RootOK(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "uppercase-url")
+	assert.Nil(t, found, "should not trigger for root URL")
+}
+
+func TestLinter_UppercaseURL_IgnoresDomain(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	// Domain has uppercase but path is lowercase - should NOT trigger
+	pageURL, _ := url.Parse("http://Example.COM/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "uppercase-url")
+	assert.Nil(t, found, "should not trigger for uppercase in domain only")
+}
+
+// Whitespace URL tests
+
+func TestLinter_WhitespaceURL_ActualSpace(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder path/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-url")
+	assert.NotNil(t, found, "expected whitespace-url lint for space in path")
+	assert.Equal(t, linter.Medium, found.Severity)
+	assert.Equal(t, linter.Internal, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+}
+
+func TestLinter_WhitespaceURL_PlusEncoded(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder+path/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-url")
+	assert.NotNil(t, found, "expected whitespace-url lint for + in path")
+	assert.Contains(t, found.Evidence, "+")
+}
+
+func TestLinter_WhitespaceURL_PercentEncoded(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder%20path/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-url")
+	assert.NotNil(t, found, "expected whitespace-url lint for %20 in path")
+	// Go's URL parser decodes %20 to space, so evidence will contain decoded path
+}
+
+func TestLinter_WhitespaceURL_PercentEncodedUppercase(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	// %20 can also appear as %2F or other cases
+	pageURL, _ := url.Parse("http://example.com/folder%20path/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-url")
+	assert.NotNil(t, found, "expected whitespace-url lint for %20 uppercase")
+}
+
+func TestLinter_WhitespaceURL_NoWhitespace(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-url")
+	assert.Nil(t, found, "should not trigger for URL without whitespace")
+}
+
+func TestLinter_WhitespaceURL_HyphenOK(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	// Hyphens are common word separators and should NOT trigger
+	pageURL, _ := url.Parse("http://example.com/folder-path/page-name.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-url")
+	assert.Nil(t, found, "should not trigger for hyphens")
+}
+
+func TestLinter_WhitespaceURL_UnderscoreOK(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	// Underscores should NOT trigger
+	pageURL, _ := url.Parse("http://example.com/folder_path/page_name.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "whitespace-url")
+	assert.Nil(t, found, "should not trigger for underscores")
+}
