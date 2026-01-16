@@ -218,4 +218,36 @@ func init() {
 		return lints
 	}
 	linter.Register(longH1)
+
+	shortTitle := &linter.Rule{
+		ID:       "short-title",
+		Name:     "Title tag length too short",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.Opportunity,
+	}
+	shortTitle.Check = func(ctx *linter.Context) []linter.Lint {
+		title := strings.TrimSpace(ctx.Doc.Find("head title").Text())
+		if len(title) > 0 && len(title) < 40 {
+			return []linter.Lint{shortTitle.Emit(fmt.Sprintf("%d chars: %s", len(title), title))}
+		}
+		return nil
+	}
+	linter.Register(shortTitle)
+
+	longTitle := &linter.Rule{
+		ID:       "long-title",
+		Name:     "Title tag length too long",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.Opportunity,
+	}
+	longTitle.Check = func(ctx *linter.Context) []linter.Lint {
+		title := strings.TrimSpace(ctx.Doc.Find("head title").Text())
+		if len(title) > 60 {
+			return []linter.Lint{longTitle.Emit(fmt.Sprintf("%d chars: %s", len(title), title))}
+		}
+		return nil
+	}
+	linter.Register(longTitle)
 }

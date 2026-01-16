@@ -113,8 +113,8 @@ func TestLinter_MultipleH1(t *testing.T) {
 func TestLinter_ValidPage(t *testing.T) {
 	html := []byte(`<!DOCTYPE html>
 <html>
-<head><title>Valid Page Title</title></head>
-<body><h1>Single H1</h1><p>Content</p></body>
+<head><title>This is a valid page title with enough characters</title></head>
+<body><h1>Welcome to our example page</h1><p>Content</p></body>
 </html>`)
 
 	pageURL, _ := url.Parse("http://example.com/")
@@ -501,6 +501,71 @@ func TestLinter_LongH1_TenWords(t *testing.T) {
 
 	found := findLint(lints, "long-h1")
 	assert.Nil(t, found, "10-word h1 should not trigger lint")
+}
+
+func TestLinter_ShortTitle(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Example of a short title</title></head>
+<body><h1>Welcome to the page</h1><p>Content here.</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-title")
+	assert.NotNil(t, found, "expected short-title lint")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Contains(t, found.Evidence, "24 chars")
+}
+
+func TestLinter_ShortTitle_Exactly40(t *testing.T) {
+	// Exactly 40 chars should NOT trigger
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>This title is exactly forty characters!!</title></head>
+<body><h1>Welcome to the page</h1><p>Content here.</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-title")
+	assert.Nil(t, found, "40-char title should not trigger lint")
+}
+
+func TestLinter_LongTitle(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Example of a rather long title that meanders around and does not concisely communicate</title></head>
+<body><h1>Welcome to the page</h1><p>Content here.</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "long-title")
+	assert.NotNil(t, found, "expected long-title lint")
+	assert.Equal(t, linter.Low, found.Severity)
+}
+
+func TestLinter_LongTitle_Exactly60(t *testing.T) {
+	// Exactly 60 chars should NOT trigger
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>This is a title that is exactly sixty characters long!</title></head>
+<body><h1>Welcome to the page</h1><p>Content here.</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "long-title")
+	assert.Nil(t, found, "60-char title should not trigger lint")
 }
 
 func TestLinter_AllRulesRegistered(t *testing.T) {
