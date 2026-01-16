@@ -183,3 +183,108 @@ func TestSiteLint_SitemapHas5xxURL_Various5xxCodes(t *testing.T) {
 		assert.NotNil(t, lint, "expected lint for status code %d", code)
 	}
 }
+
+// Tests for noindex detection
+
+func TestIsNoindexHTML_MetaRobots(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Test</title>
+<meta name="robots" content="noindex">
+</head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	assert.True(t, linter.IsNoindexHTML(html))
+}
+
+func TestIsNoindexHTML_MetaRobotsNofollow(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Test</title>
+<meta name="robots" content="noindex,nofollow">
+</head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	assert.True(t, linter.IsNoindexHTML(html))
+}
+
+func TestIsNoindexHTML_MetaGooglebot(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Test</title>
+<meta name="googlebot" content="noindex">
+</head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	assert.True(t, linter.IsNoindexHTML(html))
+}
+
+func TestIsNoindexHTML_NoNoindex(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Test</title>
+<meta name="robots" content="index,follow">
+</head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	assert.False(t, linter.IsNoindexHTML(html))
+}
+
+func TestIsNoindexHTML_NoMetaTag(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Test</title>
+</head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	assert.False(t, linter.IsNoindexHTML(html))
+}
+
+// Tests for sitemap-has-noindex-url rule
+
+func TestSiteLint_SitemapHasNoindexURL(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/",
+			StatusCode: 200,
+			InSitemap:  true,
+			IsNoindex:  false,
+		},
+		{
+			URL:        "http://example.com/noindex-page",
+			StatusCode: 200,
+			InSitemap:  true,
+			IsNoindex:  true,
+		},
+		{
+			URL:        "http://example.com/noindex-not-in-sitemap",
+			StatusCode: 200,
+			InSitemap:  false,
+			IsNoindex:  true,
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// /noindex-page is noindex AND in sitemap - should trigger
+	lint := findSiteLint(results["http://example.com/noindex-page"], "sitemap-has-noindex-url")
+	assert.NotNil(t, lint, "expected sitemap-has-noindex-url lint")
+	assert.Equal(t, linter.Critical, lint.Severity)
+	assert.Equal(t, linter.XMLSitemaps, lint.Category)
+
+	// / is indexable in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "sitemap-has-noindex-url"))
+
+	// /noindex-not-in-sitemap is noindex but NOT in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/noindex-not-in-sitemap"], "sitemap-has-noindex-url"))
+}

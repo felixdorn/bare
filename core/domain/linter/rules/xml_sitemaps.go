@@ -32,4 +32,28 @@ func init() {
 		return results
 	}
 	linter.RegisterSiteRule(serverErrorInSitemap)
+
+	// Rule: Noindex URL in XML Sitemap
+	noindexInSitemap := &linter.SiteRule{
+		ID:       "sitemap-has-noindex-url",
+		Name:     "URL in XML sitemap is noindex",
+		Severity: linter.Critical,
+		Category: linter.XMLSitemaps,
+		Tag:      linter.Issue,
+	}
+	noindexInSitemap.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+		var results []linter.SiteLintResult
+
+		for _, page := range pages {
+			if page.InSitemap && page.IsNoindex {
+				results = append(results, linter.SiteLintResult{
+					URL:   page.URL,
+					Lints: []linter.Lint{noindexInSitemap.Emit("")},
+				})
+			}
+		}
+
+		return results
+	}
+	linter.RegisterSiteRule(noindexInSitemap)
 }

@@ -195,6 +195,7 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 				Description:   analysis.Description,
 				Canonical:     analysis.Canonical,
 				StatusCode:    page.StatusCode,
+				IsNoindex:     linter.IsNoindexHTML(page.Body),
 				Lints:         lints,
 				InternalLinks: internalLinks,
 			}
@@ -237,6 +238,7 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 			URL:           p.URL,
 			StatusCode:    p.StatusCode,
 			InSitemap:     sitemapURLs[p.URL],
+			IsNoindex:     p.IsNoindex,
 			InternalLinks: links,
 		}
 	}

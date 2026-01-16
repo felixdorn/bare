@@ -25,6 +25,7 @@ type PageReport struct {
 	Description   string
 	Canonical     string
 	StatusCode    int
+	IsNoindex     bool
 	Lints         []linter.Lint
 	InternalLinks []InternalLink // Internal links found on this page
 }
