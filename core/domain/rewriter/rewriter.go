@@ -1,18 +1,25 @@
 package rewriter
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/felixdorn/bare/core/domain/url"
-
-	"golang.org/x/net/html"
 )
 
-// Rewriter walks a directory of static files and rewrites absolute URLs
+// Rewriter walks a directory of exported files and rewrites absolute URLs
 // to be root-relative, making the entire site self-contained.
+//
+// The rewriter only rewrites URLs that point to files that exist in the export.
+// This means external URLs and URLs to missing files are left unchanged.
+//
+// To prevent a specific URL from being rewritten, add ?norewrite to it:
+//
+//	http://example.com/page?norewrite → http://example.com/page (kept absolute)
+//	http://example.com/page           → /page (rewritten to relative)
+//
+// The ?norewrite parameter is removed from the final output.
 type Rewriter struct {
 	OutputDir string
 	BaseURL   *url.URL
@@ -26,110 +33,138 @@ func New(outputDir string, baseURL *url.URL) *Rewriter {
 	}
 }
 
-// Run executes the rewriting process. It walks the output directory,
-// finds HTML files, and rewrites their internal links to be root-relative.
+// Run executes the rewriting process. It builds an index of all exported files,
+// then rewrites any absolute URLs that point to those files.
 func (r *Rewriter) Run() error {
 	absOutputDir, err := filepath.Abs(r.OutputDir)
 	if err != nil {
 		return err
 	}
 
+	// Build index of all exported paths
+	exportedPaths := make(map[string]bool)
+	err = filepath.Walk(absOutputDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			relPath, _ := filepath.Rel(absOutputDir, path)
+			// Store as URL path (forward slashes, leading /)
+			urlPath := "/" + filepath.ToSlash(relPath)
+			exportedPaths[urlPath] = true
+
+			// Also index without index.html suffix for directory URLs
+			if strings.HasSuffix(urlPath, "/index.html") {
+				dirPath := strings.TrimSuffix(urlPath, "index.html")
+				exportedPaths[dirPath] = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// Build the base URL string to search for
+	baseURLStr := r.BaseURL.Scheme + "://" + r.BaseURL.Host
+
+	// Now rewrite all files
 	return filepath.Walk(absOutputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-
-		if !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".html") {
-			return r.rewriteFile(path)
+		if info.IsDir() {
+			return nil
 		}
 
-		return nil
+		return r.rewriteFile(path, baseURLStr, exportedPaths)
 	})
 }
 
-// rewriteFile reads an HTML file, rewrites its links, and saves it back to disk if changes were made.
-func (r *Rewriter) rewriteFile(filePath string) error {
+// rewriteFile reads a file, replaces absolute URLs with relative ones, and saves if changed.
+func (r *Rewriter) rewriteFile(filePath, baseURLStr string, exportedPaths map[string]bool) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
 
-	doc, err := html.Parse(bytes.NewReader(content))
-	if err != nil {
-		return err
-	}
+	original := string(content)
+	result := original
 
-	changed := false
-	var visit func(*html.Node)
-	visit = func(n *html.Node) {
-		if n.Type == html.ElementNode {
-			for i, attr := range n.Attr {
-				// We are interested in attributes that typically contain URLs.
-				if attr.Key == "href" || attr.Key == "src" {
-					newVal, wasChanged := r.relativize(attr.Val)
-					if wasChanged {
-						n.Attr[i].Val = newVal
-						changed = true
-					}
-				}
+	// Find and replace all occurrences of the base URL
+	// We look for the base URL followed by a path
+	searchStart := 0
+	for {
+		idx := strings.Index(result[searchStart:], baseURLStr)
+		if idx == -1 {
+			break
+		}
+		idx += searchStart
+
+		// Find the end of the URL (space, quote, >, or end of string)
+		urlStart := idx
+		urlEnd := idx + len(baseURLStr)
+
+		// Extract the path portion
+		for urlEnd < len(result) {
+			ch := result[urlEnd]
+			// Stop at URL terminators
+			if ch == '"' || ch == '\'' || ch == '>' || ch == '<' || ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+				break
 			}
+			urlEnd++
 		}
 
-		// Recursively visit all child nodes.
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			visit(c)
+		fullURL := result[urlStart:urlEnd]
+		pathPortion := fullURL[len(baseURLStr):]
+
+		// Handle empty path as /
+		if pathPortion == "" {
+			pathPortion = "/"
+		}
+
+		// Split off query string and fragment for checking
+		pathOnly := pathPortion
+		queryAndFragment := ""
+		if qIdx := strings.Index(pathOnly, "?"); qIdx != -1 {
+			queryAndFragment = pathOnly[qIdx:]
+			pathOnly = pathOnly[:qIdx]
+		} else if fIdx := strings.Index(pathOnly, "#"); fIdx != -1 {
+			queryAndFragment = pathOnly[fIdx:]
+			pathOnly = pathOnly[:fIdx]
+		}
+
+		// Check for ?norewrite flag
+		noRewrite := strings.Contains(queryAndFragment, "norewrite")
+		if noRewrite {
+			// Remove norewrite from query string
+			queryAndFragment = strings.Replace(queryAndFragment, "?norewrite&", "?", 1)
+			queryAndFragment = strings.Replace(queryAndFragment, "&norewrite", "", 1)
+			queryAndFragment = strings.Replace(queryAndFragment, "?norewrite", "", 1)
+		}
+
+		// Check if this path exists in our export
+		if exportedPaths[pathOnly] {
+			var newURL string
+			if noRewrite {
+				// Keep absolute URL but remove norewrite param
+				newURL = fullURL[:len(baseURLStr)] + pathOnly + queryAndFragment
+			} else {
+				// Replace with relative path
+				newURL = pathOnly + queryAndFragment
+			}
+			result = result[:urlStart] + newURL + result[urlEnd:]
+			searchStart = urlStart + len(newURL)
+		} else {
+			// Move past this URL
+			searchStart = urlEnd
 		}
 	}
 
-	visit(doc)
-
-	// Only write the file back if it has been modified.
-	if changed {
-		file, err := os.Create(filePath)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		// Render the modified HTML tree back to the file.
-		return html.Render(file, doc)
+	// Only write if changed
+	if result != original {
+		return os.WriteFile(filePath, []byte(result), 0644)
 	}
 
 	return nil
-}
-
-// relativize converts an absolute URL into a root-relative path.
-// It returns the potentially modified URL and a boolean indicating if a change was made.
-func (r *Rewriter) relativize(link string) (string, bool) {
-	linkURL, err := url.Parse(link)
-	if err != nil {
-		// Ignore malformed URLs.
-		return link, false
-	}
-
-	// We only want to process absolute URLs that point to our own site.
-	// An absolute URL must have a scheme and a host.
-	// - Must be http or https
-	// - Hostname must not be empty and must match our base URL's hostname
-	if (linkURL.Scheme != "http" && linkURL.Scheme != "https") ||
-		linkURL.Hostname() == "" ||
-		linkURL.Hostname() != r.BaseURL.Hostname() {
-		return link, false
-	}
-
-	// Construct the new root-relative path.
-	newPath := linkURL.Path
-	if newPath == "" {
-		newPath = "/"
-	}
-
-	// Preserve query parameters and fragments.
-	if linkURL.RawQuery != "" {
-		newPath += "?" + linkURL.RawQuery
-	}
-	if linkURL.Fragment != "" {
-		newPath += "#" + linkURL.Fragment
-	}
-
-	return newPath, true
 }

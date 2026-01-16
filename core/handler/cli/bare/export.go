@@ -1,4 +1,4 @@
-package cmd
+package bare
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/felixdorn/bare/core/domain/config"
 	"github.com/felixdorn/bare/core/domain/exporter"
-	"github.com/felixdorn/bare/core/domain/httpclient"
 	"github.com/felixdorn/bare/core/domain/js"
 	"github.com/felixdorn/bare/core/domain/rewriter"
 	"github.com/felixdorn/bare/core/domain/url"
@@ -153,8 +152,7 @@ func runExport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	client := httpclient.New(nil)
-	export := exporter.NewExport(conf, c.Log(), client)
+	export := exporter.NewExport(conf, c.Log(), nil)
 	if err := export.Run(ctx); err != nil {
 		return err
 	}

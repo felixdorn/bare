@@ -19,9 +19,10 @@ type Stdin interface {
 
 // CLI is the command line interface for Name.
 type CLI struct {
-	out io.Writer
-	err io.Writer
-	in  Stdin
+	name string
+	out  io.Writer
+	err  io.Writer
+	in   Stdin
 
 	log zerolog.Logger
 
@@ -52,7 +53,7 @@ func (c *CLI) Log() zerolog.Logger {
 // and returns the exit code for the command.
 func (c *CLI) Run(args []string) int {
 	cli := &cobra.Command{
-		Use:           "bare",
+		Use:           c.name,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -126,10 +127,11 @@ func (c *CLI) Add(commands ...*cobra.Command) *CLI {
 // New returns a new CLI with the given standard IO.
 func New(opts ...Opt) *CLI {
 	cli := &CLI{
-		out: os.Stdout,
-		err: os.Stderr,
-		in:  os.Stdin,
-		log: zerolog.Nop(),
+		name: "bare",
+		out:  os.Stdout,
+		err:  os.Stderr,
+		in:   os.Stdin,
+		log:  zerolog.Nop(),
 	}
 
 	for _, opt := range opts {
@@ -137,6 +139,12 @@ func New(opts ...Opt) *CLI {
 	}
 
 	return cli
+}
+
+func WithName(name string) Opt {
+	return func(c *CLI) {
+		c.name = name
+	}
 }
 
 // StatusError is an error type that contains an exit code.

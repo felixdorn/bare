@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/felixdorn/bare/core/domain/config"
-	"github.com/felixdorn/bare/core/domain/httpclient"
 	"github.com/felixdorn/bare/core/domain/url"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -52,13 +51,10 @@ func TestExport_Run(t *testing.T) {
 	// Treat the homepage as extract-only
 	conf.Pages.ExtractOnly = url.Paths{"/"}
 
-	// 4. Create the test HTTP client
-	// Use the mock server's client to ensure requests go to our test server, not the real internet
-	testClient := httpclient.New(server.Client())
-
-	// 5. Create the exporter instance with a Nop logger to keep test output clean
+	// 4. Create the exporter instance with a Nop logger to keep test output clean
+	// Use the mock server's client to ensure requests go to our test server
 	log := zerolog.Nop()
-	export := NewExport(conf, log, testClient)
+	export := NewExport(conf, log, server.Client())
 
 	// 6. Run the exporter
 	err = export.Run(context.Background())

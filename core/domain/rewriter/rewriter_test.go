@@ -1,6 +1,8 @@
 package rewriter
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/felixdorn/bare/core/domain/url"
@@ -8,91 +10,92 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRewriter_relativize(t *testing.T) {
-	baseURL, err := url.Parse("http://example.com/base/")
-	require.NoError(t, err, "Failed to parse base URL")
+func TestRewriter_Run(t *testing.T) {
+	// Create temp directory structure
+	tmpDir := t.TempDir()
 
-	r := New("dist", baseURL)
+	// Create some "exported" files
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte(`
+		<html>
+		<head><link href="http://example.com/style.css"></head>
+		<body>
+			<a href="http://example.com/about.html">About</a>
+			<a href="http://example.com/contact/">Contact</a>
+			<a href="http://external.com/page">External</a>
+			<a href="http://example.com/missing.html">Missing</a>
+		</body>
+		</html>
+	`), 0644))
 
-	testCases := []struct {
-		name          string
-		inputLink     string
-		expectedLink  string
-		expectChanged bool
-	}{
-		{
-			name:          "absolute internal URL",
-			inputLink:     "http://example.com/about.html",
-			expectedLink:  "/about.html",
-			expectChanged: true,
-		},
-		{
-			name:          "absolute internal URL with subdirectory",
-			inputLink:     "http://example.com/blog/my-post",
-			expectedLink:  "/blog/my-post",
-			expectChanged: true,
-		},
-		{
-			name:          "absolute internal root URL",
-			inputLink:     "http://example.com/",
-			expectedLink:  "/",
-			expectChanged: true,
-		},
-		{
-			name:          "absolute internal URL with query and fragment",
-			inputLink:     "http://example.com/search?q=term#results",
-			expectedLink:  "/search?q=term#results",
-			expectChanged: true,
-		},
-		{
-			name:          "absolute internal https URL",
-			inputLink:     "https://example.com/secure",
-			expectedLink:  "/secure",
-			expectChanged: true,
-		},
-		{
-			name:          "external URL",
-			inputLink:     "http://othersite.com/page",
-			expectedLink:  "http://othersite.com/page",
-			expectChanged: false,
-		},
-		{
-			name:          "relative URL",
-			inputLink:     "contact.html",
-			expectedLink:  "contact.html",
-			expectChanged: false,
-		},
-		{
-			name:          "root-relative URL",
-			inputLink:     "/assets/style.css",
-			expectedLink:  "/assets/style.css",
-			expectChanged: false,
-		},
-		{
-			name:          "URL with different scheme",
-			inputLink:     "mailto:user@example.com",
-			expectedLink:  "mailto:user@example.com",
-			expectChanged: false,
-		},
-		{
-			name:          "malformed URL",
-			inputLink:     "http://[::1]:namedport",
-			expectedLink:  "http://[::1]:namedport",
-			expectChanged: false,
-		},
-		{
-			name:          "empty link",
-			inputLink:     "",
-			expectedLink:  "",
-			expectChanged: false,
-		},
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "style.css"), []byte(`body { color: blue; }`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "about.html"), []byte(`<h1>About</h1>`), 0644))
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			newLink, changed := r.relativize(tc.inputLink)
-			assert.Equal(t, tc.expectedLink, newLink, "The rewritten link should match the expected value")
-			assert.Equal(t, tc.expectChanged, changed, "The 'changed' flag should be as expected")
-		})
-	}
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "contact"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "contact", "index.html"), []byte(`<h1>Contact</h1>`), 0644))
+
+	// Create sitemap.xml with absolute URLs
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "sitemap.xml"), []byte(`<?xml version="1.0"?>
+<urlset>
+	<url><loc>http://example.com/</loc></url>
+	<url><loc>http://example.com/about.html</loc></url>
+	<url><loc>http://example.com/contact/</loc></url>
+</urlset>
+	`), 0644))
+
+	baseURL, err := url.Parse("http://example.com")
+	require.NoError(t, err)
+
+	r := New(tmpDir, baseURL)
+	err = r.Run()
+	require.NoError(t, err)
+
+	// Check index.html was rewritten
+	content, err := os.ReadFile(filepath.Join(tmpDir, "index.html"))
+	require.NoError(t, err)
+	html := string(content)
+
+	assert.Contains(t, html, `href="/style.css"`, "style.css should be rewritten to relative")
+	assert.Contains(t, html, `href="/about.html"`, "about.html should be rewritten to relative")
+	assert.Contains(t, html, `href="/contact/"`, "contact/ should be rewritten to relative")
+	assert.Contains(t, html, `href="http://external.com/page"`, "external URL should not be changed")
+	assert.Contains(t, html, `href="http://example.com/missing.html"`, "missing file URL should not be changed")
+
+	// Check sitemap.xml was rewritten
+	content, err = os.ReadFile(filepath.Join(tmpDir, "sitemap.xml"))
+	require.NoError(t, err)
+	sitemap := string(content)
+
+	assert.Contains(t, sitemap, `<loc>/</loc>`, "root URL should be rewritten")
+	assert.Contains(t, sitemap, `<loc>/about.html</loc>`, "about URL should be rewritten")
+	assert.Contains(t, sitemap, `<loc>/contact/</loc>`, "contact URL should be rewritten")
+}
+
+func TestRewriter_NoRewrite(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create file with norewrite URLs
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte(`
+		<a href="http://example.com/about.html?norewrite">Keep absolute</a>
+		<a href="http://example.com/about.html">Make relative</a>
+		<a href="http://example.com/about.html?norewrite&foo=bar">Keep with params</a>
+		<a href="http://example.com/about.html?foo=bar&norewrite">Keep with params before</a>
+	`), 0644))
+
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "about.html"), []byte(`<h1>About</h1>`), 0644))
+
+	baseURL, err := url.Parse("http://example.com")
+	require.NoError(t, err)
+
+	r := New(tmpDir, baseURL)
+	err = r.Run()
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, "index.html"))
+	require.NoError(t, err)
+	html := string(content)
+
+	assert.Contains(t, html, `href="http://example.com/about.html"`, "norewrite URL should stay absolute but without ?norewrite")
+	assert.Contains(t, html, `href="/about.html"`, "normal URL should be rewritten to relative")
+	assert.Contains(t, html, `href="http://example.com/about.html?foo=bar"`, "norewrite with other params should keep params")
+	assert.NotContains(t, html, "norewrite", "norewrite param should be removed from all URLs")
 }

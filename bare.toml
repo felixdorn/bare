@@ -7,6 +7,6 @@ enabled = false
 wait_for = 2000
 
 [pages]
-entrypoints = ['/']
+entrypoints = ['/', '/sitemap.xml']
 extract_only = []
 exclude = []
