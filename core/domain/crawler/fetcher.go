@@ -58,9 +58,13 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, u *url.URL) (*FetchResult, erro
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > 0 {
 				prev := via[len(via)-1]
+				statusCode := 0
+				if prev.Response != nil {
+					statusCode = prev.Response.StatusCode
+				}
 				chain = append(chain, Redirect{
 					URL:        prev.URL.String(),
-					StatusCode: prev.Response.StatusCode,
+					StatusCode: statusCode,
 				})
 			}
 			if len(via) >= 10 {
