@@ -161,14 +161,27 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 				lints = nil
 			}
 
+			// Extract internal followed links
+			var internalLinks []reporter.InternalLink
+			for _, link := range page.Links {
+				if link.URL.IsInternal(page.URL) {
+					isFollow := !strings.Contains(strings.ToLower(link.Rel), "nofollow")
+					internalLinks = append(internalLinks, reporter.InternalLink{
+						TargetURL: link.URL.String(),
+						IsFollow:  isFollow,
+					})
+				}
+			}
+
 			pageReport := reporter.PageReport{
-				URL:         page.URL.String(),
-				Title:       analysis.Title,
-				Description: analysis.Description,
-				Canonical:   analysis.Canonical,
-				StatusCode:  page.StatusCode,
-				Images:      analysis.Images,
-				Lints:       lints,
+				URL:           page.URL.String(),
+				Title:         analysis.Title,
+				Description:   analysis.Description,
+				Canonical:     analysis.Canonical,
+				StatusCode:    page.StatusCode,
+				Images:        analysis.Images,
+				Lints:         lints,
+				InternalLinks: internalLinks,
 			}
 
 			pagesMu.Lock()
@@ -194,6 +207,29 @@ func runReport(c *cli.CLI, cmd *cobra.Command, args []string) error {
 	if len(pages) == 0 {
 		fmt.Println("No pages found to report.")
 		return nil
+	}
+
+	// Run site-level lints
+	siteLintInput := make([]linter.SiteLintInput, len(pages))
+	for i, p := range pages {
+		links := make([]linter.SiteLink, len(p.InternalLinks))
+		for j, l := range p.InternalLinks {
+			links[j] = linter.SiteLink{
+				TargetURL: l.TargetURL,
+				IsFollow:  l.IsFollow,
+			}
+		}
+		siteLintInput[i] = linter.SiteLintInput{
+			URL:           p.URL,
+			InternalLinks: links,
+		}
+	}
+
+	siteLints := linter.RunSiteRules(siteLintInput)
+	for i, p := range pages {
+		if lints, ok := siteLints[p.URL]; ok {
+			pages[i].Lints = append(pages[i].Lints, lints...)
+		}
 	}
 
 	// Generate the report

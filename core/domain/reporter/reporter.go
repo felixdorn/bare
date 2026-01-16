@@ -13,15 +13,22 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+// InternalLink represents a followed internal link from this page.
+type InternalLink struct {
+	TargetURL string
+	IsFollow  bool // true if the link is followed (not nofollow)
+}
+
 // PageReport contains all the data for a single page in the report.
 type PageReport struct {
-	URL         string
-	Title       string
-	Description string
-	Canonical   string
-	StatusCode  int
-	Images      []analyzer.Image
-	Lints       []linter.Lint
+	URL           string
+	Title         string
+	Description   string
+	Canonical     string
+	StatusCode    int
+	Images        []analyzer.Image
+	Lints         []linter.Lint
+	InternalLinks []InternalLink // Internal links found on this page
 }
 
 // Report contains all the data for the full report.
