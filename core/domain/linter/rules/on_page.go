@@ -250,4 +250,36 @@ func init() {
 		return nil
 	}
 	linter.Register(longTitle)
+
+	metaDescTooLong := &linter.Rule{
+		ID:       "meta-description-too-long",
+		Name:     "Meta description length too long",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.Opportunity,
+	}
+	metaDescTooLong.Check = func(ctx *linter.Context) []linter.Lint {
+		desc, exists := ctx.Doc.Find(`head meta[name="description"]`).Attr("content")
+		if exists && len(desc) > 320 {
+			return []linter.Lint{metaDescTooLong.Emit(fmt.Sprintf("%d characters", len(desc)))}
+		}
+		return nil
+	}
+	linter.Register(metaDescTooLong)
+
+	metaDescTooShort := &linter.Rule{
+		ID:       "meta-description-too-short",
+		Name:     "Meta description length too short",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.Opportunity,
+	}
+	metaDescTooShort.Check = func(ctx *linter.Context) []linter.Lint {
+		desc, exists := ctx.Doc.Find(`head meta[name="description"]`).Attr("content")
+		if exists && len(desc) > 0 && len(desc) < 110 {
+			return []linter.Lint{metaDescTooShort.Emit(fmt.Sprintf("%d characters", len(desc)))}
+		}
+		return nil
+	}
+	linter.Register(metaDescTooShort)
 }

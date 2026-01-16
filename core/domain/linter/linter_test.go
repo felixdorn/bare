@@ -1,6 +1,8 @@
 package linter_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/felixdorn/bare/core/domain/linter"
@@ -566,6 +568,102 @@ func TestLinter_LongTitle_Exactly60(t *testing.T) {
 
 	found := findLint(lints, "long-title")
 	assert.Nil(t, found, "60-char title should not trigger lint")
+}
+
+func TestLinter_MetaDescriptionTooLong(t *testing.T) {
+	longDesc := strings.Repeat("a", 321)
+	html := []byte(fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="%s">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`, longDesc))
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-too-long")
+	assert.NotNil(t, found, "expected meta-description-too-long lint")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Contains(t, found.Evidence, "321")
+}
+
+func TestLinter_MetaDescriptionTooLong_Boundary(t *testing.T) {
+	desc320 := strings.Repeat("a", 320)
+	html := []byte(fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="%s">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`, desc320))
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-too-long")
+	assert.Nil(t, found, "320-char description should not trigger lint")
+}
+
+func TestLinter_MetaDescriptionTooShort(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="Short description here">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-too-short")
+	assert.NotNil(t, found, "expected meta-description-too-short lint")
+	assert.Equal(t, linter.Low, found.Severity)
+}
+
+func TestLinter_MetaDescriptionTooShort_Boundary(t *testing.T) {
+	desc110 := strings.Repeat("a", 110)
+	html := []byte(fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="%s">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`, desc110))
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-too-short")
+	assert.Nil(t, found, "110-char description should not trigger lint")
+}
+
+func TestLinter_MetaDescriptionTooShort_EmptyDoesNotTrigger(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-too-short")
+	assert.Nil(t, found, "empty description should not trigger too-short lint")
 }
 
 func TestLinter_AllRulesRegistered(t *testing.T) {
