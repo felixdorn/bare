@@ -408,6 +408,101 @@ func TestLinter_LoremIpsum_NotPresent(t *testing.T) {
 	assert.Nil(t, found, "should not trigger without Lorem Ipsum text")
 }
 
+func TestLinter_ShortH1(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<p>Content here.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-h1")
+	assert.NotNil(t, found, "expected short-h1 lint for 1-word h1")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Contains(t, found.Evidence, "1 words")
+}
+
+func TestLinter_ShortH1_TwoWords(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Example h1</h1>
+<p>Content here.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-h1")
+	assert.NotNil(t, found, "expected short-h1 lint for 2-word h1")
+	assert.Contains(t, found.Evidence, "2 words")
+}
+
+func TestLinter_ShortH1_ThreeWords(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Welcome to example</h1>
+<p>Content here.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-h1")
+	assert.Nil(t, found, "3-word h1 should not trigger lint")
+}
+
+func TestLinter_LongH1(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>This is an example h1 on an example page that is too long</h1>
+<p>Content here.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "long-h1")
+	assert.NotNil(t, found, "expected long-h1 lint for 11+ word h1")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Contains(t, found.Evidence, "13 words")
+}
+
+func TestLinter_LongH1_TenWords(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>One two three four five six seven eight nine ten</h1>
+<p>Content here.</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "long-h1")
+	assert.Nil(t, found, "10-word h1 should not trigger lint")
+}
+
 func TestLinter_AllRulesRegistered(t *testing.T) {
 	rules := linter.All()
 	assert.GreaterOrEqual(t, len(rules), 4, "expected at least 4 rules registered")

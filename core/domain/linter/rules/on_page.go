@@ -178,4 +178,44 @@ func init() {
 		return nil
 	}
 	linter.Register(loremIpsum)
+
+	shortH1 := &linter.Rule{
+		ID:       "short-h1",
+		Name:     "H1 length too short",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.Opportunity,
+	}
+	shortH1.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+		ctx.Doc.Find("h1").Each(func(i int, s *goquery.Selection) {
+			text := strings.TrimSpace(s.Text())
+			words := strings.Fields(text)
+			if len(words) > 0 && len(words) < 3 {
+				lints = append(lints, shortH1.Emit(fmt.Sprintf("%d words: %s", len(words), text)))
+			}
+		})
+		return lints
+	}
+	linter.Register(shortH1)
+
+	longH1 := &linter.Rule{
+		ID:       "long-h1",
+		Name:     "H1 length too long",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.Opportunity,
+	}
+	longH1.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+		ctx.Doc.Find("h1").Each(func(i int, s *goquery.Selection) {
+			text := strings.TrimSpace(s.Text())
+			words := strings.Fields(text)
+			if len(words) > 10 {
+				lints = append(lints, longH1.Emit(fmt.Sprintf("%d words: %s", len(words), text)))
+			}
+		})
+		return lints
+	}
+	linter.Register(longH1)
 }
