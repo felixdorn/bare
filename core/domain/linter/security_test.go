@@ -532,3 +532,174 @@ func TestLinter_InternalHTTPURL_HTTPWith500(t *testing.T) {
 	found := findLint(lints, "internal-http-url")
 	assert.Nil(t, found, "HTTP URLs with 500 status should not trigger")
 }
+
+// HTTPS links to HTTP tests
+
+func TestLinter_HTTPSLinksToHTTP_InternalHTTPLink(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com/other-page">Other Page</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-links-to-http")
+	assert.NotNil(t, found, "expected https-links-to-http lint for internal HTTP link")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.Security, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+	assert.Contains(t, found.Evidence, "http://example.com/other-page")
+}
+
+func TestLinter_HTTPSLinksToHTTP_ExternalHTTPLink(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://other-site.com/page">External Page</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-links-to-http")
+	assert.Nil(t, found, "external HTTP links should not trigger")
+}
+
+func TestLinter_HTTPSLinksToHTTP_InternalHTTPSLink(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="https://example.com/other-page">Other Page</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-links-to-http")
+	assert.Nil(t, found, "internal HTTPS links should not trigger")
+}
+
+func TestLinter_HTTPSLinksToHTTP_RelativeLink(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="/other-page">Other Page</a>
+<a href="../parent">Parent</a>
+<a href="sibling.html">Sibling</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-links-to-http")
+	assert.Nil(t, found, "relative links should not trigger (inherit HTTPS)")
+}
+
+func TestLinter_HTTPSLinksToHTTP_HTTPPage(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com/other-page">Other Page</a>
+</body>
+</html>`)
+
+	// HTTP page - should not trigger this rule
+	pageURL, _ := url.Parse("http://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-links-to-http")
+	assert.Nil(t, found, "HTTP pages should not trigger this rule")
+}
+
+func TestLinter_HTTPSLinksToHTTP_MultipleInternalHTTPLinks(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com/page1">Page 1</a>
+<a href="http://example.com/page2">Page 2</a>
+<a href="https://example.com/page3">Page 3</a>
+<a href="http://other-site.com/external">External</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "https-links-to-http" {
+			count++
+		}
+	}
+	assert.Equal(t, 2, count, "should detect both internal HTTP links")
+}
+
+func TestLinter_HTTPSLinksToHTTP_DuplicateLinksReportedOnce(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="http://example.com/page1">Link 1</a>
+<a href="http://example.com/page1">Link 2</a>
+<a href="http://example.com/page1">Link 3</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "https-links-to-http" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "duplicate links should only be reported once")
+}
+
+func TestLinter_HTTPSLinksToHTTP_SkipsSpecialSchemes(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<a href="javascript:void(0)">JS</a>
+<a href="mailto:test@example.com">Email</a>
+<a href="tel:+1234567890">Phone</a>
+<a href="#section">Anchor</a>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "https-links-to-http")
+	assert.Nil(t, found, "special schemes should not trigger")
+}

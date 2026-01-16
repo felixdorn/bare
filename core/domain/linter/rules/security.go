@@ -152,4 +152,60 @@ func init() {
 		return nil
 	}
 	linter.Register(internalHTTPURL)
+
+	httpsLinksToHTTP := &linter.Rule{
+		ID:       "https-links-to-http",
+		Name:     "HTTPS page links to internal HTTP URL",
+		Severity: linter.High,
+		Category: linter.Security,
+		Tag:      linter.Issue,
+	}
+	httpsLinksToHTTP.Check = func(ctx *linter.Context) []linter.Lint {
+		// Only applies to HTTPS pages
+		if ctx.URL.Scheme != "https" {
+			return nil
+		}
+
+		var lints []linter.Lint
+		seen := make(map[string]bool)
+
+		ctx.Doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+			href, exists := s.Attr("href")
+			if !exists || href == "" {
+				return
+			}
+
+			href = strings.TrimSpace(href)
+			hrefLower := strings.ToLower(href)
+
+			// Skip non-HTTP schemes
+			if strings.HasPrefix(hrefLower, "javascript:") ||
+				strings.HasPrefix(hrefLower, "mailto:") ||
+				strings.HasPrefix(hrefLower, "tel:") ||
+				strings.HasPrefix(hrefLower, "data:") ||
+				strings.HasPrefix(href, "#") {
+				return
+			}
+
+			// Parse and resolve the URL
+			parsed, err := url.Parse(href)
+			if err != nil {
+				return
+			}
+
+			resolved := ctx.URL.ResolveReference(parsed)
+
+			// Check if it's an internal HTTP link
+			if resolved.Scheme == "http" && resolved.IsInternal(ctx.URL) {
+				urlStr := resolved.String()
+				if !seen[urlStr] {
+					seen[urlStr] = true
+					lints = append(lints, httpsLinksToHTTP.Emit(urlStr))
+				}
+			}
+		})
+
+		return lints
+	}
+	linter.Register(httpsLinksToHTTP)
 }
