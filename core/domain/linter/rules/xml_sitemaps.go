@@ -83,6 +83,32 @@ func init() {
 	}
 	linter.RegisterSiteRule(notFoundInSitemap)
 
+	// Rule: 3XX URL in XML Sitemap
+	redirectInSitemap := &linter.SiteRule{
+		ID:       "sitemap-has-3xx-url",
+		Name:     "URL in XML sitemap returns redirect (3XX)",
+		Severity: linter.Medium,
+		Category: linter.XMLSitemaps,
+		Tag:      linter.Issue,
+	}
+	redirectInSitemap.Check = func(pages []linter.SiteLintInput) []linter.SiteLintResult {
+		var results []linter.SiteLintResult
+
+		for _, page := range pages {
+			if page.InSitemap && page.StatusCode >= 300 && page.StatusCode < 400 {
+				results = append(results, linter.SiteLintResult{
+					URL: page.URL,
+					Lints: []linter.Lint{
+						redirectInSitemap.Emit(fmt.Sprintf("HTTP %d", page.StatusCode)),
+					},
+				})
+			}
+		}
+
+		return results
+	}
+	linter.RegisterSiteRule(redirectInSitemap)
+
 	// Rule: Canonicalized URL in XML Sitemap
 	canonicalizedInSitemap := &linter.SiteRule{
 		ID:       "sitemap-has-canonicalized-url",

@@ -344,6 +344,61 @@ func TestSiteLint_SitemapHas4xxURL_Various4xxCodes(t *testing.T) {
 	}
 }
 
+// Tests for sitemap-has-3xx-url rule
+
+func TestSiteLint_SitemapHas3xxURL(t *testing.T) {
+	pages := []linter.SiteLintInput{
+		{
+			URL:        "http://example.com/",
+			StatusCode: 200,
+			InSitemap:  true,
+		},
+		{
+			URL:        "http://example.com/old-page",
+			StatusCode: 301,
+			InSitemap:  true,
+		},
+		{
+			URL:        "http://example.com/not-in-sitemap",
+			StatusCode: 302,
+			InSitemap:  false,
+		},
+	}
+
+	results := linter.RunSiteRules(pages)
+
+	// /old-page is 301 AND in sitemap - should trigger
+	lint := findSiteLint(results["http://example.com/old-page"], "sitemap-has-3xx-url")
+	assert.NotNil(t, lint, "expected sitemap-has-3xx-url lint")
+	assert.Equal(t, linter.Medium, lint.Severity)
+	assert.Equal(t, linter.XMLSitemaps, lint.Category)
+	assert.Contains(t, lint.Evidence, "301")
+
+	// / is 200 in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/"], "sitemap-has-3xx-url"))
+
+	// /not-in-sitemap is 302 but NOT in sitemap - should not trigger
+	assert.Nil(t, findSiteLint(results["http://example.com/not-in-sitemap"], "sitemap-has-3xx-url"))
+}
+
+func TestSiteLint_SitemapHas3xxURL_Various3xxCodes(t *testing.T) {
+	codes := []int{301, 302, 303, 307, 308}
+
+	for _, code := range codes {
+		pages := []linter.SiteLintInput{
+			{
+				URL:        "http://example.com/redirect",
+				StatusCode: code,
+				InSitemap:  true,
+			},
+		}
+
+		results := linter.RunSiteRules(pages)
+		lint := findSiteLint(results["http://example.com/redirect"], "sitemap-has-3xx-url")
+		assert.NotNil(t, lint, "expected lint for status code %d", code)
+	}
+}
+
 // Tests for sitemap-has-canonicalized-url rule
 
 func TestSiteLint_SitemapHasCanonicalizedURL(t *testing.T) {
