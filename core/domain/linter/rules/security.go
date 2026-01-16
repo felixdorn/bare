@@ -252,4 +252,103 @@ func init() {
 		return lints
 	}
 	linter.Register(httpsFormToHTTP)
+
+	protocolRelativeURI := &linter.Rule{
+		ID:       "protocol-relative-uri",
+		Name:     "Loads resources using protocol relative URI",
+		Severity: linter.High,
+		Category: linter.Security,
+		Tag:      linter.Issue,
+	}
+	protocolRelativeURI.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+		seen := make(map[string]bool)
+
+		checkProtocolRelative := func(rawURL string) {
+			if rawURL == "" {
+				return
+			}
+
+			rawURL = strings.TrimSpace(rawURL)
+
+			// Check if URL starts with // (protocol-relative)
+			if strings.HasPrefix(rawURL, "//") {
+				if !seen[rawURL] {
+					seen[rawURL] = true
+					lints = append(lints, protocolRelativeURI.Emit(rawURL))
+				}
+			}
+		}
+
+		// Check scripts
+		ctx.Doc.Find("script[src]").Each(func(i int, s *goquery.Selection) {
+			if src, exists := s.Attr("src"); exists {
+				checkProtocolRelative(src)
+			}
+		})
+
+		// Check stylesheets and other link elements
+		ctx.Doc.Find("link[href]").Each(func(i int, s *goquery.Selection) {
+			if href, exists := s.Attr("href"); exists {
+				checkProtocolRelative(href)
+			}
+		})
+
+		// Check images
+		ctx.Doc.Find("img[src]").Each(func(i int, s *goquery.Selection) {
+			if src, exists := s.Attr("src"); exists {
+				checkProtocolRelative(src)
+			}
+		})
+
+		// Check image srcset
+		ctx.Doc.Find("img[srcset], source[srcset]").Each(func(i int, s *goquery.Selection) {
+			if srcset, exists := s.Attr("srcset"); exists {
+				for _, entry := range strings.Split(srcset, ",") {
+					parts := strings.Fields(strings.TrimSpace(entry))
+					if len(parts) > 0 {
+						checkProtocolRelative(parts[0])
+					}
+				}
+			}
+		})
+
+		// Check video and audio sources
+		ctx.Doc.Find("video[src], audio[src], source[src]").Each(func(i int, s *goquery.Selection) {
+			if src, exists := s.Attr("src"); exists {
+				checkProtocolRelative(src)
+			}
+		})
+
+		// Check video poster
+		ctx.Doc.Find("video[poster]").Each(func(i int, s *goquery.Selection) {
+			if poster, exists := s.Attr("poster"); exists {
+				checkProtocolRelative(poster)
+			}
+		})
+
+		// Check iframes
+		ctx.Doc.Find("iframe[src]").Each(func(i int, s *goquery.Selection) {
+			if src, exists := s.Attr("src"); exists {
+				checkProtocolRelative(src)
+			}
+		})
+
+		// Check object data
+		ctx.Doc.Find("object[data]").Each(func(i int, s *goquery.Selection) {
+			if data, exists := s.Attr("data"); exists {
+				checkProtocolRelative(data)
+			}
+		})
+
+		// Check embed
+		ctx.Doc.Find("embed[src]").Each(func(i int, s *goquery.Selection) {
+			if src, exists := s.Attr("src"); exists {
+				checkProtocolRelative(src)
+			}
+		})
+
+		return lints
+	}
+	linter.Register(protocolRelativeURI)
 }

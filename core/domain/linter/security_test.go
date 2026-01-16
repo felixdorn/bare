@@ -911,3 +911,244 @@ func TestLinter_HTTPSFormToHTTP_JavascriptAction(t *testing.T) {
 	found := findLint(lints, "https-form-to-http")
 	assert.Nil(t, found, "javascript: action should not trigger")
 }
+
+// Protocol relative URI tests
+
+func TestLinter_ProtocolRelativeURI_Script(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page</title>
+<script src="//code.jquery.com/jquery-2.2.3.min.js"></script>
+</head>
+<body>
+<h1>Hello</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.NotNil(t, found, "expected protocol-relative-uri lint for script")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.Security, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+	assert.Contains(t, found.Evidence, "//code.jquery.com/jquery-2.2.3.min.js")
+}
+
+func TestLinter_ProtocolRelativeURI_Stylesheet(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page</title>
+<link href="//fonts.googleapis.com/css?family=Istok+Web" rel="stylesheet" type="text/css">
+</head>
+<body>
+<h1>Hello</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.NotNil(t, found, "expected protocol-relative-uri lint for stylesheet")
+	assert.Contains(t, found.Evidence, "//fonts.googleapis.com")
+}
+
+func TestLinter_ProtocolRelativeURI_Image(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="//example.com/img/logo.png">
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.NotNil(t, found, "expected protocol-relative-uri lint for image")
+	assert.Contains(t, found.Evidence, "//example.com/img/logo.png")
+}
+
+func TestLinter_ProtocolRelativeURI_HTTPPage(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page</title>
+<script src="//code.jquery.com/jquery.min.js"></script>
+</head>
+<body>
+<h1>Hello</h1>
+</body>
+</html>`)
+
+	// Should trigger on HTTP pages too
+	pageURL, _ := url.Parse("http://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.NotNil(t, found, "should trigger on HTTP pages as well")
+}
+
+func TestLinter_ProtocolRelativeURI_AbsoluteHTTPS(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page</title>
+<script src="https://code.jquery.com/jquery.min.js"></script>
+</head>
+<body>
+<h1>Hello</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.Nil(t, found, "absolute HTTPS URLs should not trigger")
+}
+
+func TestLinter_ProtocolRelativeURI_RelativeURL(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page</title>
+<script src="/js/app.js"></script>
+</head>
+<body>
+<h1>Hello</h1>
+<img src="../images/logo.png">
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.Nil(t, found, "relative URLs should not trigger")
+}
+
+func TestLinter_ProtocolRelativeURI_Video(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<video src="//media.example.com/video.mp4"></video>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.NotNil(t, found, "expected protocol-relative-uri lint for video")
+}
+
+func TestLinter_ProtocolRelativeURI_Iframe(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<iframe src="//embed.example.com/widget"></iframe>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "protocol-relative-uri")
+	assert.NotNil(t, found, "expected protocol-relative-uri lint for iframe")
+}
+
+func TestLinter_ProtocolRelativeURI_Srcset(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img srcset="//example.com/small.jpg 480w, //example.com/large.jpg 800w">
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "protocol-relative-uri" {
+			count++
+		}
+	}
+	assert.Equal(t, 2, count, "should detect both protocol-relative URLs in srcset")
+}
+
+func TestLinter_ProtocolRelativeURI_MultipleResources(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page</title>
+<script src="//cdn.example.com/script.js"></script>
+<link href="//cdn.example.com/style.css" rel="stylesheet">
+</head>
+<body>
+<h1>Hello</h1>
+<img src="//cdn.example.com/image.png">
+<img src="https://example.com/safe.png">
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "protocol-relative-uri" {
+			count++
+		}
+	}
+	assert.Equal(t, 3, count, "should detect all 3 protocol-relative URLs")
+}
+
+func TestLinter_ProtocolRelativeURI_DuplicatesReportedOnce(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page</title>
+<script src="//cdn.example.com/script.js"></script>
+<script src="//cdn.example.com/script.js"></script>
+</head>
+<body>
+<h1>Hello</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	count := 0
+	for _, l := range lints {
+		if l.Rule == "protocol-relative-uri" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "duplicate URLs should only be reported once")
+}
