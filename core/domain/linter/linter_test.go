@@ -666,6 +666,102 @@ func TestLinter_MetaDescriptionTooShort_EmptyDoesNotTrigger(t *testing.T) {
 	assert.Nil(t, found, "empty description should not trigger too-short lint")
 }
 
+func TestLinter_MetaDescriptionTooShort_WhitespaceDoesNotTrigger(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="   ">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-too-short")
+	assert.Nil(t, found, "whitespace-only description should not trigger too-short lint")
+}
+
+func TestLinter_MetaDescriptionEmpty(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-empty")
+	assert.NotNil(t, found, "expected meta-description-empty lint")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Equal(t, linter.PotentialIssue, found.Tag)
+}
+
+func TestLinter_MetaDescriptionEmpty_Whitespace(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="   ">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "meta-description-empty")
+	assert.NotNil(t, found, "whitespace-only description should trigger empty lint")
+}
+
+func TestLinter_MultipleMetaDescriptions(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="First description">
+<meta name="description" content="Second description">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "multiple-meta-descriptions")
+	assert.NotNil(t, found, "expected multiple-meta-descriptions lint")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Equal(t, linter.Issue, found.Tag)
+	assert.Contains(t, found.Evidence, "2")
+}
+
+func TestLinter_SingleMetaDescription_NoLint(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<meta name="description" content="Just one description that is long enough to not trigger short">
+</head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil)
+	require.NoError(t, err)
+
+	found := findLint(lints, "multiple-meta-descriptions")
+	assert.Nil(t, found, "single meta description should not trigger lint")
+}
+
 func TestLinter_AllRulesRegistered(t *testing.T) {
 	rules := linter.All()
 	assert.GreaterOrEqual(t, len(rules), 4, "expected at least 4 rules registered")

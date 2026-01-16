@@ -251,6 +251,41 @@ func init() {
 	}
 	linter.Register(longTitle)
 
+	metaDescEmpty := &linter.Rule{
+		ID:       "meta-description-empty",
+		Name:     "Meta description is empty",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.PotentialIssue,
+	}
+	metaDescEmpty.Check = func(ctx *linter.Context) []linter.Lint {
+		meta := ctx.Doc.Find(`head meta[name="description"]`)
+		if meta.Length() > 0 {
+			content, exists := meta.First().Attr("content")
+			if exists && strings.TrimSpace(content) == "" {
+				return []linter.Lint{metaDescEmpty.Emit("")}
+			}
+		}
+		return nil
+	}
+	linter.Register(metaDescEmpty)
+
+	multipleMetaDesc := &linter.Rule{
+		ID:       "multiple-meta-descriptions",
+		Name:     "Multiple meta descriptions",
+		Severity: linter.Low,
+		Category: linter.OnPage,
+		Tag:      linter.Issue,
+	}
+	multipleMetaDesc.Check = func(ctx *linter.Context) []linter.Lint {
+		count := ctx.Doc.Find(`head meta[name="description"]`).Length()
+		if count > 1 {
+			return []linter.Lint{multipleMetaDesc.Emit(fmt.Sprintf("Found %d meta descriptions", count))}
+		}
+		return nil
+	}
+	linter.Register(multipleMetaDesc)
+
 	metaDescTooLong := &linter.Rule{
 		ID:       "meta-description-too-long",
 		Name:     "Meta description length too long",
@@ -276,7 +311,7 @@ func init() {
 	}
 	metaDescTooShort.Check = func(ctx *linter.Context) []linter.Lint {
 		desc, exists := ctx.Doc.Find(`head meta[name="description"]`).Attr("content")
-		if exists && len(desc) > 0 && len(desc) < 110 {
+		if exists && len(strings.TrimSpace(desc)) > 0 && len(desc) < 110 {
 			return []linter.Lint{metaDescTooShort.Emit(fmt.Sprintf("%d characters", len(desc)))}
 		}
 		return nil
