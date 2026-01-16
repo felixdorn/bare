@@ -973,6 +973,99 @@ func TestLinter_RedirectsToSelf_NoRedirects(t *testing.T) {
 	assert.Nil(t, found, "should not trigger when no redirects exist")
 }
 
+func TestLinter_RedirectBroken_4XX(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Not Found</title></head>
+<body><h1>404</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/old-page", StatusCode: 301},
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    404,
+		RedirectChain: chain,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirect-broken")
+	assert.NotNil(t, found, "expected redirect-broken lint for 4XX after redirect")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.Redirects, found.Category)
+	assert.Contains(t, found.Evidence, "404")
+}
+
+func TestLinter_RedirectBroken_5XX(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Error</title></head>
+<body><h1>500</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/old-page", StatusCode: 302},
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    500,
+		RedirectChain: chain,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirect-broken")
+	assert.NotNil(t, found, "expected redirect-broken lint for 5XX after redirect")
+	assert.Contains(t, found.Evidence, "500")
+}
+
+func TestLinter_RedirectBroken_NoRedirect(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Not Found</title></head>
+<body><h1>404</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	opts := linter.CheckOptions{
+		StatusCode:    404,
+		RedirectChain: nil, // No redirects
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirect-broken")
+	assert.Nil(t, found, "should not trigger when there are no redirects")
+}
+
+func TestLinter_RedirectBroken_SuccessfulRedirect(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/old-page", StatusCode: 301},
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: chain,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirect-broken")
+	assert.Nil(t, found, "should not trigger for successful redirect")
+}
+
 func findLint(lints []linter.Lint, ruleID string) *linter.Lint {
 	for _, l := range lints {
 		if l.Rule == ruleID {
