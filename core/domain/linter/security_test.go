@@ -422,3 +422,113 @@ func TestLinter_MixedContent_DuplicateURLsReportedOnce(t *testing.T) {
 	}
 	assert.Equal(t, 1, count, "duplicate URLs should only be reported once")
 }
+
+// Internal HTTP URL tests
+
+func TestLinter_InternalHTTPURL_HTTPWith200(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	opts := linter.CheckOptions{
+		StatusCode: 200,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "internal-http-url")
+	assert.NotNil(t, found, "expected internal-http-url lint for HTTP URL with 200")
+	assert.Equal(t, linter.Critical, found.Severity)
+	assert.Equal(t, linter.Security, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+}
+
+func TestLinter_InternalHTTPURL_HTTPSWith200(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("https://example.com/page")
+	opts := linter.CheckOptions{
+		StatusCode: 200,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "internal-http-url")
+	assert.Nil(t, found, "HTTPS URLs should not trigger internal-http-url")
+}
+
+func TestLinter_InternalHTTPURL_HTTPWith404(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Not Found</title></head>
+<body>
+<h1>404</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	opts := linter.CheckOptions{
+		StatusCode: 404,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "internal-http-url")
+	assert.Nil(t, found, "HTTP URLs with non-200 status should not trigger")
+}
+
+func TestLinter_InternalHTTPURL_HTTPWith301(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Redirect</title></head>
+<body>
+<h1>Moved</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/old-page")
+	opts := linter.CheckOptions{
+		StatusCode: 301,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "internal-http-url")
+	assert.Nil(t, found, "HTTP URLs with redirect status should not trigger")
+}
+
+func TestLinter_InternalHTTPURL_HTTPWith500(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Error</title></head>
+<body>
+<h1>Server Error</h1>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	opts := linter.CheckOptions{
+		StatusCode: 500,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "internal-http-url")
+	assert.Nil(t, found, "HTTP URLs with 500 status should not trigger")
+}

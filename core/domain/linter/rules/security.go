@@ -136,4 +136,20 @@ func init() {
 		return lints
 	}
 	linter.Register(mixedContent)
+
+	internalHTTPURL := &linter.Rule{
+		ID:       "internal-http-url",
+		Name:     "Internal URL uses insecure HTTP protocol",
+		Severity: linter.Critical,
+		Category: linter.Security,
+		Tag:      linter.Issue,
+	}
+	internalHTTPURL.Check = func(ctx *linter.Context) []linter.Lint {
+		// Only trigger for HTTP URLs that return 200
+		if ctx.URL.Scheme == "http" && ctx.StatusCode == 200 {
+			return []linter.Lint{internalHTTPURL.Emit("")}
+		}
+		return nil
+	}
+	linter.Register(internalHTTPURL)
 }
