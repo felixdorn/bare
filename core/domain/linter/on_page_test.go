@@ -354,6 +354,105 @@ func TestLinter_MissingAlt_RolePresentation(t *testing.T) {
 	assert.Nil(t, found, "decorative image with role=presentation should not trigger lint")
 }
 
+func TestLinter_ShortAltText(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png" alt="Logo">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-alt-text")
+	assert.NotNil(t, found, "expected short-alt-text lint for 4-char alt")
+	assert.Equal(t, linter.High, found.Severity)
+	assert.Equal(t, linter.Issue, found.Tag)
+	assert.Contains(t, found.Evidence, "test.png")
+	assert.Contains(t, found.Evidence, "Logo")
+}
+
+func TestLinter_ShortAltText_NineChars(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png" alt="123456789">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-alt-text")
+	assert.NotNil(t, found, "expected short-alt-text lint for 9-char alt")
+}
+
+func TestLinter_ShortAltText_TenChars(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png" alt="1234567890">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-alt-text")
+	assert.Nil(t, found, "10-char alt should not trigger lint")
+}
+
+func TestLinter_ShortAltText_GoodAlt(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png" alt="A detailed description of the image">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-alt-text")
+	assert.Nil(t, found, "good alt text should not trigger lint")
+}
+
+func TestLinter_ShortAltText_RolePresentation(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body>
+<h1>Hello</h1>
+<img src="test.png" alt="X" role="presentation">
+<p>Content</p>
+</body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{})
+	require.NoError(t, err)
+
+	found := findLint(lints, "short-alt-text")
+	assert.Nil(t, found, "decorative image with role=presentation should not trigger lint")
+}
+
 func TestLinter_LoremIpsum(t *testing.T) {
 	html := []byte(`<!DOCTYPE html>
 <html>

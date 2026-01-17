@@ -185,6 +185,31 @@ func init() {
 	}
 	linter.Register(missingAlt)
 
+	shortAlt := &linter.Rule{
+		ID:       "short-alt-text",
+		Name:     "Image alt text is too short",
+		Severity: linter.High,
+		Category: linter.OnPage,
+		Tag:      linter.Issue,
+	}
+	shortAlt.Check = func(ctx *linter.Context) []linter.Lint {
+		var lints []linter.Lint
+		ctx.Doc.Find("img").Each(func(i int, s *goquery.Selection) {
+			// Skip images with role="presentation" (decorative)
+			if role, exists := s.Attr("role"); exists && role == "presentation" {
+				return
+			}
+
+			alt, exists := s.Attr("alt")
+			if exists && strings.TrimSpace(alt) != "" && len(strings.TrimSpace(alt)) < 10 {
+				src, _ := s.Attr("src")
+				lints = append(lints, shortAlt.Emit(fmt.Sprintf("%s: %s", src, alt)))
+			}
+		})
+		return lints
+	}
+	linter.Register(shortAlt)
+
 	loremIpsum := &linter.Rule{
 		ID:       "lorem-ipsum",
 		Name:     "Contains Lorem Ipsum dummy text",

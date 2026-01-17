@@ -18,9 +18,12 @@ func TestLinter_RedirectsToSelf(t *testing.T) {
 <body><h1>Hello</h1><p>Content</p></body>
 </html>`)
 
+	// Redirect loop: page-a -> page-b -> page-a
 	pageURL, _ := url.Parse("http://example.com/page-a")
 	chain := []crawler.Redirect{
 		{URL: "http://example.com/page-a", StatusCode: 301},
+		{URL: "http://example.com/page-b", StatusCode: 302},
+		{URL: "http://example.com/page-a", StatusCode: 301}, // Loop back to page-a
 	}
 	opts := linter.CheckOptions{
 		StatusCode:    200,
@@ -31,7 +34,7 @@ func TestLinter_RedirectsToSelf(t *testing.T) {
 	require.NoError(t, err)
 
 	found := findLint(lints, "redirects-to-self")
-	assert.NotNil(t, found, "expected redirects-to-self lint")
+	assert.NotNil(t, found, "expected redirects-to-self lint for redirect loop")
 	assert.Equal(t, linter.High, found.Severity)
 	assert.Equal(t, linter.Redirects, found.Category)
 	assert.Equal(t, linter.Issue, found.Tag)
@@ -45,10 +48,12 @@ func TestLinter_RedirectsToSelf_InChain(t *testing.T) {
 <body><h1>Hello</h1><p>Content</p></body>
 </html>`)
 
+	// Loop in middle of chain: page-b appears twice
 	pageURL, _ := url.Parse("http://example.com/page-a")
 	chain := []crawler.Redirect{
 		{URL: "http://example.com/page-b", StatusCode: 301},
-		{URL: "http://example.com/page-a", StatusCode: 302}, // Self-redirect in middle of chain
+		{URL: "http://example.com/page-c", StatusCode: 302},
+		{URL: "http://example.com/page-b", StatusCode: 301}, // Loop back to page-b
 	}
 	opts := linter.CheckOptions{
 		StatusCode:    200,
@@ -59,7 +64,7 @@ func TestLinter_RedirectsToSelf_InChain(t *testing.T) {
 	require.NoError(t, err)
 
 	found := findLint(lints, "redirects-to-self")
-	assert.NotNil(t, found, "expected redirects-to-self lint when self-redirect is in chain")
+	assert.NotNil(t, found, "expected redirects-to-self lint when loop detected in chain")
 }
 
 func TestLinter_RedirectsToSelf_NoSelfRedirect(t *testing.T) {
@@ -104,6 +109,31 @@ func TestLinter_RedirectsToSelf_NoRedirects(t *testing.T) {
 
 	found := findLint(lints, "redirects-to-self")
 	assert.Nil(t, found, "should not trigger when no redirects exist")
+}
+
+func TestLinter_RedirectsToSelf_TrailingSlashRedirect(t *testing.T) {
+	// Common scenario: /page redirects to /page/ (trailing slash)
+	// This should NOT trigger the redirects-to-self lint
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page Title</title></head>
+<body><h1>Hello</h1><p>Content</p></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/players/the-anchor")
+	chain := []crawler.Redirect{
+		{URL: "http://example.com/players/the-anchor", StatusCode: 301}, // Original URL that triggered redirect
+	}
+	opts := linter.CheckOptions{
+		StatusCode:    200,
+		RedirectChain: chain,
+	}
+
+	lints, err := linter.Check(html, pageURL, nil, opts)
+	require.NoError(t, err)
+
+	found := findLint(lints, "redirects-to-self")
+	assert.Nil(t, found, "simple trailing slash redirect should not trigger lint")
 }
 
 func TestLinter_RedirectBroken_4XX(t *testing.T) {

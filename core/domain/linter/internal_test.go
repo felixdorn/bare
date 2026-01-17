@@ -166,6 +166,302 @@ func TestSiteLint_BrokenInternalURL_NoCrawlError(t *testing.T) {
 	assert.Nil(t, findSiteLint(results["http://example.com/page"], "broken-internal-url-crawl-error"))
 }
 
+// Tracking parameters tests
+
+func TestLinter_TrackingParameters_UTM(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page?utm_medium=email")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.NotNil(t, found, "expected tracking-parameters lint for utm_medium")
+	assert.Equal(t, linter.Medium, found.Severity)
+	assert.Equal(t, linter.Internal, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+	assert.Contains(t, found.Evidence, "utm_medium")
+}
+
+func TestLinter_TrackingParameters_MultipleUTM(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page?utm_source=newsletter&utm_medium=email&utm_campaign=spring")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.NotNil(t, found, "expected tracking-parameters lint")
+	assert.Contains(t, found.Evidence, "utm_source")
+	assert.Contains(t, found.Evidence, "utm_medium")
+	assert.Contains(t, found.Evidence, "utm_campaign")
+}
+
+func TestLinter_TrackingParameters_GoogleAds(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page?gclid=abc123")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.NotNil(t, found, "expected tracking-parameters lint for gclid")
+	assert.Contains(t, found.Evidence, "gclid")
+}
+
+func TestLinter_TrackingParameters_Facebook(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page?fbclid=xyz789")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.NotNil(t, found, "expected tracking-parameters lint for fbclid")
+	assert.Contains(t, found.Evidence, "fbclid")
+}
+
+func TestLinter_TrackingParameters_Microsoft(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page?msclkid=def456")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.NotNil(t, found, "expected tracking-parameters lint for msclkid")
+	assert.Contains(t, found.Evidence, "msclkid")
+}
+
+func TestLinter_TrackingParameters_NoTrackingParams(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page?id=123&category=shoes")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.Nil(t, found, "should not trigger for non-tracking query params")
+}
+
+func TestLinter_TrackingParameters_NoQueryString(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/page")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.Nil(t, found, "should not trigger for URL without query string")
+}
+
+func TestLinter_TrackingParameters_MixedParams(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	// Mix of tracking and non-tracking params
+	pageURL, _ := url.Parse("http://example.com/page?id=123&utm_source=google&category=shoes")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "tracking-parameters")
+	assert.NotNil(t, found, "expected tracking-parameters lint")
+	assert.Contains(t, found.Evidence, "utm_source")
+	assert.NotContains(t, found.Evidence, "id")
+	assert.NotContains(t, found.Evidence, "category")
+}
+
+// Non-ASCII URL tests
+
+func TestLinter_NonASCIIURL_SpecialCharsInPath(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/øê.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-ascii-url")
+	assert.NotNil(t, found, "expected non-ascii-url lint for special characters")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Equal(t, linter.Internal, found.Category)
+	assert.Equal(t, linter.PotentialIssue, found.Tag)
+}
+
+func TestLinter_NonASCIIURL_ChineseChars(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/中央大学.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-ascii-url")
+	assert.NotNil(t, found, "expected non-ascii-url lint for Chinese characters")
+}
+
+func TestLinter_NonASCIIURL_Thorn(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/þorn.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-ascii-url")
+	assert.NotNil(t, found, "expected non-ascii-url lint for thorn character")
+}
+
+func TestLinter_NonASCIIURL_InQueryString(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/page.html?大学")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-ascii-url")
+	assert.NotNil(t, found, "expected non-ascii-url lint for non-ASCII in query string")
+}
+
+func TestLinter_NonASCIIURL_ASCIIOnlyOK(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/page.html?id=123")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "non-ascii-url")
+	assert.Nil(t, found, "should not trigger for ASCII-only URL")
+}
+
+// Double slash URL tests
+
+func TestLinter_DoubleSlashURL_AfterDomain(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com//folder/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "double-slash-url")
+	assert.NotNil(t, found, "expected double-slash-url lint")
+	assert.Equal(t, linter.Low, found.Severity)
+	assert.Equal(t, linter.Internal, found.Category)
+	assert.Equal(t, linter.Issue, found.Tag)
+}
+
+func TestLinter_DoubleSlashURL_AfterDirectory(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder//page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "double-slash-url")
+	assert.NotNil(t, found, "expected double-slash-url lint for double slash after directory")
+}
+
+func TestLinter_DoubleSlashURL_TripleSlash(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder///page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "double-slash-url")
+	assert.NotNil(t, found, "expected double-slash-url lint for triple slash")
+}
+
+func TestLinter_DoubleSlashURL_SingleSlashOK(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/folder/page.html")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "double-slash-url")
+	assert.Nil(t, found, "should not trigger for normal URL with single slashes")
+}
+
+func TestLinter_DoubleSlashURL_RootOK(t *testing.T) {
+	html := []byte(`<!DOCTYPE html>
+<html>
+<head><title>Page</title></head>
+<body><h1>Hello</h1></body>
+</html>`)
+
+	pageURL, _ := url.Parse("http://example.com/")
+	lints, err := linter.Check(html, pageURL, nil, linter.CheckOptions{StatusCode: 200})
+	require.NoError(t, err)
+
+	found := findLint(lints, "double-slash-url")
+	assert.Nil(t, found, "should not trigger for root URL")
+}
+
 // Uppercase URL tests
 
 func TestLinter_UppercaseURL_UppercaseFolder(t *testing.T) {

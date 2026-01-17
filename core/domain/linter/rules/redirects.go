@@ -19,11 +19,13 @@ func init() {
 			return nil
 		}
 
-		pageURL := ctx.URL.String()
+		// Check for duplicate URLs in the redirect chain (indicates a loop)
+		seen := make(map[string]bool)
 		for _, redirect := range ctx.RedirectChain {
-			if redirect.URL == pageURL {
+			if seen[redirect.URL] {
 				return []linter.Lint{redirectsToSelf.Emit(redirect.URL)}
 			}
+			seen[redirect.URL] = true
 		}
 		return nil
 	}
