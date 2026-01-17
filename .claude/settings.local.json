@@ -3,7 +3,12 @@
     "allow": [
       "WebSearch",
       "Bash(go test:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(gh release delete:*)",
+      "Bash(git tag:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

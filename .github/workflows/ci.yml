@@ -80,7 +80,7 @@ jobs:
           CGO_ENABLED=0 go build -v \
             -o "$binary_name" \
             -ldflags="-s -w -X 'github.com/felixdorn/bare/core/static.Version=${{ env.VERSION }}' -X 'github.com/felixdorn/bare/core/static.Commit=${{ github.sha }}'" \
-            main.go
+            ./cmd/bare
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
